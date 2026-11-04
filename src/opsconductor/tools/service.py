@@ -1,11 +1,11 @@
-"""Read-only ERP tool service backed by tenant-scoped repositories."""
+"""ERP tool service exposing tenant-scoped reads and transactional writes."""
 
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from opsconductor.domain import repositories
+from opsconductor.domain import repositories, write_service
 from opsconductor.domain.address import address_is_valid
 
 __all__ = ["ErpToolService", "address_is_valid"]
@@ -79,3 +79,65 @@ class ErpToolService:
         if order is None:
             raise ValueError("order not found")
         return {"valid": address_is_valid(order), "order_id": str(order_id)}
+
+    async def order_split(
+        self,
+        tenant_id: UUID,
+        order_id: UUID,
+        shipments: list[dict[str, Any]],
+        idempotency_key: str,
+        dry_run: bool = False,
+        actor_id: UUID | None = None,
+        task_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        """Split an order into shipments; the write service owns the commit."""
+
+        return await write_service.split_order(
+            self.session,
+            tenant_id,
+            order_id,
+            shipments,
+            idempotency_key,
+            dry_run=dry_run,
+            actor_id=actor_id,
+            task_id=task_id,
+        )
+
+    async def order_revert_split(
+        self,
+        tenant_id: UUID,
+        order_id: UUID,
+        idempotency_key: str,
+        task_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        """Compensate a split by cancelling shipments and restoring the order."""
+
+        return await write_service.cancel_split(
+            self.session, tenant_id, order_id, idempotency_key, task_id=task_id
+        )
+
+    async def shipment_cancel(
+        self,
+        tenant_id: UUID,
+        shipment_id: UUID,
+        idempotency_key: str,
+        task_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        """Cancel one shipment and release its reserved inventory."""
+
+        return await write_service.cancel_shipment(
+            self.session, tenant_id, shipment_id, idempotency_key, task_id=task_id
+        )
+
+    async def inventory_release(
+        self,
+        tenant_id: UUID,
+        order_id: UUID,
+        idempotency_key: str,
+        task_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        """Release reserved inventory for every active shipment of an order."""
+
+        return await write_service.release_inventory(
+            self.session, tenant_id, order_id, idempotency_key, task_id=task_id
+        )
