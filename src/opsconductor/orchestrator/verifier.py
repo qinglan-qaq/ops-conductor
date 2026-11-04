@@ -1,4 +1,16 @@
-"""Deterministic post-condition verification for executed plan nodes."""
+"""对已执行计划节点做确定性后置校验。
+
+校验器只读：所有检查都通过仓储读取数据库，不写入业务数据、不提交事务，最终
+任务状态由执行器决定。
+
+Invariants:
+
+- 只校验 ``results`` 中出现的节点；被审批拒绝或跳过的节点不在其中。
+- 拆分校验要求订单状态为 ``split``，且各 SKU 的订单数量总和与发运数量总和
+  完全一致（按 SKU 聚合，不要求逐行对应）。
+- 校验后每个 SKU 在该仓库的库存 ``available`` 与 ``reserved`` 必须非负。
+- 拆分与改址都必须留下对应动作的审计行；改址还必须与计划地址一致。
+"""
 
 from collections import Counter
 from typing import Any
@@ -17,7 +29,12 @@ ADDRESS_ACTION = "change_address"
 
 
 class VerificationResult(BaseModel):
-    """Outcome of a deterministic post-condition check."""
+    """一次确定性后置校验的结果。
+
+    Attributes:
+        passed: 所有检查是否通过。
+        reason: 失败时可读的原因；通过时为空。
+    """
 
     passed: bool
     reason: str = ""
@@ -47,17 +64,16 @@ def _as_uuid(value: Any) -> UUID | None:
 
 
 class Verifier:
-    """Check the deterministic post-conditions of executed split/address nodes.
+    """检查已执行拆分/改址节点的确定性后置条件。
 
-    Only nodes present in ``results`` are verified: nodes skipped by rejection
-    or approval are intentionally absent, and the executor owns the final task
-    status. A failed check returns a readable reason so compensation is
-    explainable.
+    只校验 ``results`` 中出现的节点：被拒绝或未审批而跳过的节点会有意缺席，
+    最终任务状态仍由执行器拥有。检查失败返回可读原因，使补偿可解释。
 
-    Shipment coverage is compared as per-SKU quantity totals, the same invariant
-    the write service enforces: an order line of qty 3 is satisfied by shipment
-    lines of qty 2 and 1, regardless of how those quantities are grouped into
-    individual shipment-line rows.
+    发运覆盖度按每个 SKU 的数量总和比较，与写入服务强制的约束一致：数量为 3
+    的订单行可由数量 2 与 1 的发运行满足，无论这些数量被拆成多少行。
+
+    Note:
+        校验器是只读的：它不写业务数据，也不提交事务。
     """
 
     def __init__(self, session: AsyncSession):
@@ -66,6 +82,20 @@ class Verifier:
     async def verify(
         self, task: Any, plan: Any, results: dict[str, Any]
     ) -> VerificationResult:
+        """依次校验计划中出现在 ``results`` 里的写入节点。
+
+        Args:
+            task: 任务对象，提供 ``tenant_id`` 与 ``id``。
+            plan: 计划对象或字典，含 ``nodes`` 列表。
+            results: 节点 ID 到工具输出的映射；不在其中的节点会被跳过。
+
+        Returns:
+            首个失败检查的 :class:`VerificationResult`，或全部通过的结果。
+
+        Note:
+            只读检查；未知动作的节点会被跳过而不报错。
+        """
+
         for node in _plan_nodes(plan):
             node_id = node.get("node_id")
             if node_id not in results:
@@ -84,6 +114,19 @@ class Verifier:
     async def _verify_split(
         self, task: Any, node: dict[str, Any]
     ) -> str | None:
+        """校验一次拆分：订单状态、发运数量、库存与审计行。
+
+        Args:
+            task: 任务对象，限定租户与审计归属。
+            node: 被校验的拆分节点。
+
+        Returns:
+            首个失败原因；全部通过时返回 ``None``。
+
+        Note:
+            发运覆盖度按每个 SKU 的数量总和比较，这是预期的校验不变量；逐行
+            一一对应不是要求。
+        """
         tenant_id = task.tenant_id
         order_id = _as_uuid(node.get("order_id"))
         if order_id is None:
@@ -135,6 +178,19 @@ class Verifier:
     async def _verify_address(
         self, task: Any, node: dict[str, Any]
     ) -> str | None:
+        """校验改址：订单地址与计划地址一致，且存在审计行。
+
+        Args:
+            task: 任务对象，限定租户与审计归属。
+            node: 被校验的改址节点。
+
+        Returns:
+            首个失败原因；全部通过时返回 ``None``。
+
+        Note:
+            计划地址可以是完整地址字符串，也可以是逐字段字典；字典只比较出现
+            其中的 ``ADDRESS_FIELDS`` 字段。
+        """
         tenant_id = task.tenant_id
         order_id = _as_uuid(node.get("order_id"))
         if order_id is None:
@@ -180,6 +236,7 @@ class Verifier:
     async def _order_line_multiset(
         self, tenant_id: UUID, order_id: UUID
     ) -> Counter[UUID]:
+        """按 SKU 聚合订单行的数量总和。"""
         lines = list(
             (
                 await self.session.scalars(
@@ -198,6 +255,7 @@ class Verifier:
     async def _shipment_line_multiset(
         self, tenant_id: UUID, shipments: list[Shipment]
     ) -> Counter[UUID]:
+        """按 SKU 聚合给定发运单下所有发运行的数量总和。"""
         lines = list(
             (
                 await self.session.scalars(
@@ -226,6 +284,7 @@ class Verifier:
     async def _audit_exists(
         self, task: Any, action: str, entity_id: str
     ) -> bool:
+        """确认任务在租户内留下了指定动作与实体的审计行。"""
         found = await self.session.scalar(
             select(AuditLog.id)
             .where(

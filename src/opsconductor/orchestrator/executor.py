@@ -1,9 +1,19 @@
-"""Execution graph: dry-run, write, verify, and compensate approved plan nodes.
+"""基于 LangGraph 的执行层：对已审批的计划节点做 dry-run、写入、校验与补偿。
 
-The approval gate is external (Task 11). This module assumes approval decisions
-are resolved and executes only approved write nodes, recording every plan node
-in ``task_step``. Completed writes are compensated in reverse order when
-execution or verification fails.
+执行器在构造时绑定单个租户，任务、审批与 ``task_step`` 查询都限定在该租户内。
+审批门禁位于本模块之外（Task 11 负责）：写入是否放行只由持久化的审批行决定，
+不信任调用方传入的标志。
+
+Invariants:
+
+- Task 11 的审批行是唯一的写入门禁；``pending`` 或 ``expired`` 审批会让任务
+  回到 ``awaiting_approval``，且不写入任何内容。
+- dry-run 任一节点失败都会短路：整个运行在任何真实写入之前中止，因此无需补偿。
+- 工具调用的幂等键固定为 ``task_id:node_id``；已成功的 ``TaskStep`` 在重复执行
+  时直接重放，不再调用工具。
+- 补偿范围：校验失败是全局失败，补偿全部已完成的写入；写入失败时只补偿失败
+  订单已完成的节点，成功订单的写入保留。
+- 执行器不持有任务级锁；可重入性依赖持久化的 ``task_step`` 与工具幂等键。
 """
 
 import uuid
@@ -38,7 +48,19 @@ UNRESOLVED_APPROVAL_STATUSES = {
 
 
 class ExecutionResult(BaseModel):
-    """Final result of one executor run."""
+    """一次执行器运行的最终结果，同时作为任务 ``result`` 的持久化载荷。
+
+    Attributes:
+        task_id: 被执行的运营任务 ID。
+        status: 最终 ``TaskStatus`` 值。
+        reason: 状态的人类可读原因；成功时为空。
+        verified: 确定性校验是否通过。
+        succeeded: 写入成功的计划节点 ID 列表。
+        skipped: 被审批拒绝或跳过的计划节点 ID 列表。
+        failed: 写入失败的计划节点 ID 列表。
+        compensated: 已成功补偿的计划节点 ID 列表。
+        failed_compensations: 补偿失败的计划节点 ID 列表。
+    """
 
     task_id: str
     status: str
@@ -52,7 +74,12 @@ class ExecutionResult(BaseModel):
 
 
 class ToolClient(Protocol):
-    """Injectable ERP tool client; ``ErpToolClient`` is the production binding."""
+    """可注入的 ERP 工具调用客户端。
+
+    Note:
+        ``ErpToolClient`` 是生产绑定；测试可传入内存实现来记录调用或注入故障。
+        工具抛出异常即视为该节点失败。
+    """
 
     async def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]: ...
 
@@ -66,7 +93,11 @@ def _utcnow() -> datetime:
 
 
 class _TracedNodes:
-    """Wrap every graph node with a committed production trace span."""
+    """把每个图节点包装为一个已提交的生产 trace span。
+
+    每个节点执行完成后立即提交，因此检查点线程只是一次调用内的便利设施，
+    持久化的 ``task_step`` 与任务状态才是重入时的真实来源。
+    """
 
     def __init__(self, executor: "TaskExecutor") -> None:
         self._executor = executor
@@ -107,11 +138,20 @@ class _TracedNodes:
 
 
 class TaskExecutor:
-    """Run approved plan nodes through the LangGraph execution state machine.
+    """通过 LangGraph 执行状态机运行已审批的计划节点。
 
-    The executor is bound to one tenant at construction; every task, approval,
-    and task-step lookup is scoped to that tenant. Approval decisions are read
-    from the Task 11 rows, never inferred from a caller-provided flag.
+    执行器在构造时绑定单个租户；任务、审批和 task-step 查询都限定在该租户内。
+    审批决策只读取 Task 11 的审批行，绝不根据调用方传入的布尔值推断。
+
+    Attributes:
+        session: 用于读写任务、步骤、审批与 trace 的会话。
+        tool_client: 注入的 ERP 工具客户端。
+        tenant_id: 该执行器唯一可访问的租户。
+        verifier: 确定性后置校验器，默认使用 :class:`Verifier`。
+
+    Note:
+        执行器不获取任务级锁：重复执行依赖成功的 ``TaskStep`` 重放与工具幂等键，
+        不会重复产生业务副作用。
     """
 
     def __init__(
@@ -128,23 +168,51 @@ class TaskExecutor:
         self._graph = build_graph(_TracedNodes(self))
 
     async def start(self, task_id: UUID | str) -> ExecutionResult:
-        """Execute a task whose approval decisions are already resolved."""
+        """执行一个审批决策已全部落定的任务。
+
+        Args:
+            task_id: 要执行的任务 ID；必须属于执行器的租户。
+
+        Returns:
+            最终状态、原因以及按结果分组的节点 ID。
+
+        Raises:
+            ValueError: ``task_id`` 无法解析为 UUID 时由 ``UUID`` 转换抛出。
+
+        Note:
+            任务缺失、计划缺失、存在未解决审批或 dry-run 失败都会收敛为一条
+            最终报告，而不是向调用方抛出异常。
+        """
 
         return await self._invoke(task_id)
 
     async def resume(
         self, task_id: UUID | str, approved: bool
     ) -> ExecutionResult:
-        """Re-enter execution; persisted approval rows are authoritative.
+        """重新进入执行；持久化的审批行才是权威。
 
-        ``approved`` is accepted for interface compatibility but never bypasses
-        the Task 11 gate: only nodes whose approval row is ``approved`` run.
+        Args:
+            task_id: 要重新执行的任务 ID。
+            approved: 为接口兼容而保留的布尔参数，会被忽略。
+
+        Returns:
+            与 :meth:`start` 相同的最终执行结果。
+
+        Note:
+            ``approved`` 永远不会绕过 Task 11 门禁：只有审批行为 ``approved``
+            的节点才会执行，因此传 ``True`` 也不会写入未审批节点。
         """
 
         del approved
         return await self.start(task_id)
 
     async def _invoke(self, task_id: UUID | str) -> ExecutionResult:
+        """以全新的线程 ID 运行一次完整图流程。
+
+        每次调用生成新的 ``thread_id``，因此检查点不跨调用复用；重入的正确性
+        来自持久化的 ``task_step`` 与任务状态。若图没有产出报告，则回退为
+        ``failed`` 结果。
+        """
         initial: ExecutionState = {
             "task_id": str(task_id),
             "tenant_id": str(self.tenant_id),
@@ -191,7 +259,22 @@ class TaskExecutor:
     # Graph nodes ---------------------------------------------------------
 
     async def load(self, state: ExecutionState) -> dict[str, Any]:
-        """Load the task, resolve approvals, and decide whether to execute."""
+        """加载任务、解析审批并决定是否进入执行。
+
+        Args:
+            state: 初始执行状态，至少包含 ``task_id``。
+
+        Returns:
+            状态增量：放行时包含 ``gate="execute"``、计划、可执行/被拒节点与
+            重置的累积字段；不可执行时包含 ``gate="report"``、``reason`` 与
+            ``final_status``。
+
+        Note:
+            存在 ``pending`` 或 ``expired`` 审批时直接路由到 report 并返回
+            ``awaiting_approval``，不写入任何内容。任务被放行后会把状态置为
+            ``running`` 并提交。没有 ``approved`` 审批行的写入节点进入
+            ``rejected``，非写入节点稍后统一记为跳过。
+        """
 
         task_id = UUID(state["task_id"])
         task = await self._load_task(task_id)
@@ -269,7 +352,21 @@ class TaskExecutor:
         }
 
     async def dry_run(self, state: ExecutionState) -> dict[str, Any]:
-        """Dry-run every approved write node before any write is executed."""
+        """在执行任何真实写入之前对所有已审批写入节点做 dry-run。
+
+        Args:
+            state: 包含可执行节点、计划与累积结果的执行状态。
+
+        Returns:
+            更新后的 ``results``、``completed``、``succeeded``、``failed``
+            与 ``skipped_writes``。
+
+        Note:
+            已成功（``succeeded``）的 ``TaskStep`` 直接重放其输出，不再调用
+            工具。任一节点 dry-run 失败都会让本次运行在任何写入之前中止，
+            因此无需补偿；其余未执行的计划节点仍会各写一条跳过步骤，失败节点
+            留下 ``failed`` 步骤。
+        """
 
         task = await self._execution_task(state)
         if task is None:
@@ -331,7 +428,20 @@ class TaskExecutor:
         }
 
     async def execute(self, state: ExecutionState) -> dict[str, Any]:
-        """Execute approved write nodes and record every plan node as a step."""
+        """执行已审批的写入节点，并为每个计划节点记录一条步骤。
+
+        Args:
+            state: dry-run 之后包含可执行节点与计划的状态。
+
+        Returns:
+            更新后的 ``results``、``completed``、``succeeded``、``failed``
+            与 ``skipped_writes``。
+
+        Note:
+            已成功的步骤会被重放并跳过，保证重复执行不重复写入。同一订单的
+            某节点失败后，该订单剩余节点会记为跳过而不继续写入，其他订单不受
+            影响。工具调用使用 ``task_id:node_id`` 作为幂等键。
+        """
 
         task = await self._execution_task(state)
         if task is None:
@@ -404,11 +514,17 @@ class TaskExecutor:
         *,
         unexecuted_reason: str | None = None,
     ) -> list[str]:
-        """Record skipped non-write, rejected, and aborted write nodes.
+        """记录被跳过的非写入、被拒绝以及中止的写入节点。
 
-        With ``unexecuted_reason`` set, approved write nodes that are still
-        ``running`` from a successful dry run are closed as skipped because the
-        run aborted before execution.
+        Args:
+            task: 步骤所归属的任务。
+            state: 提供计划与拒绝节点集合的执行状态。
+            unexecuted_reason: 设置后，dry-run 成功但仍处于 ``running`` 的
+                已审批写入节点会以该原因关闭为跳过，因为本次运行在写入前
+                已经中止。
+
+        Returns:
+            本次新记为跳过的节点 ID 列表。
         """
 
         skipped: list[str] = []
@@ -433,7 +549,19 @@ class TaskExecutor:
         return skipped
 
     async def verify(self, state: ExecutionState) -> dict[str, Any]:
-        """Run deterministic post-condition checks for executed writes."""
+        """对已执行的写入运行确定性后置校验。
+
+        Args:
+            state: 包含 ``gate``、计划、结果与失败节点列表的执行状态。
+
+        Returns:
+            包含 ``verified`` 与 ``verification_reason`` 的状态增量；未进入
+            执行分支时返回空字典。
+
+        Note:
+            有写入失败时不再校验，直接把失败节点汇总为原因。校验器抛出的任何
+            异常都视为校验失败，交由补偿节点处理；校验本身只读，不写业务数据。
+        """
 
         if state.get("gate") != "execute":
             return {}
@@ -465,12 +593,19 @@ class TaskExecutor:
         return {"verified": result.passed, "verification_reason": result.reason}
 
     async def compensate(self, state: ExecutionState) -> dict[str, Any]:
-        """Compensate completed writes for orders that failed execution.
+        """按完成顺序逆序补偿失败订单已完成的写入。
 
-        A verification failure is global, so every completed write is
-        compensated. A write/execution failure is order-scoped: only completed
-        nodes for the failed order are compensated, and successful orders keep
-        their writes.
+        Args:
+            state: 包含已完成节点、失败节点、计划与结果的执行状态。
+
+        Returns:
+            包含 ``compensated`` 与 ``failed_compensations`` 的状态增量；没有
+            需要补偿的节点时返回空字典。
+
+        Note:
+            校验失败是全局的，此时补偿每个已完成的写入。写入失败则按订单归属
+            补偿：只处理失败订单已完成的节点，成功订单的写入保持不动。缺失
+            补偿工具或补偿调用失败都会记为补偿失败，不会中断其余节点的补偿。
         """
 
         completed = state.get("completed") or []
@@ -533,7 +668,19 @@ class TaskExecutor:
         }
 
     async def report(self, state: ExecutionState) -> dict[str, Any]:
-        """Persist the final task status and return the execution result."""
+        """持久化最终任务状态并返回执行结果。
+
+        Args:
+            state: 执行结束时的状态。
+
+        Returns:
+            包含 ``final_status`` 与 ``report`` 的状态增量。
+
+        Note:
+            门禁未放行时按 ``final_status`` 或 ``failed`` 落报告，不改写任务。
+            进入执行分支时按 :meth:`_final_status` 映射状态，把报告写入
+            ``task.result``，仅在 ``failed`` 时写入 ``task.error``，并提交。
+        """
 
         if state.get("gate") != "execute":
             status = state.get("final_status") or TaskStatus.failed.value
@@ -569,10 +716,23 @@ class TaskExecutor:
     async def _call_tool(
         self, task: TaskRun, tool: str, arguments: dict[str, Any]
     ) -> dict[str, Any]:
-        """Call one ERP tool and commit a production tool span for it.
+        """调用一个 ERP 工具，并为它提交一条生产 tool span。
 
-        The span is committed even when the tool raises, so failed writes and
-        failed compensations remain visible in the trace timeline.
+        Args:
+            task: 该调用归属的任务。
+            tool: 工具名，例如 ``order_split``。
+            arguments: 工具参数，包含幂等键与 ``dry_run`` 标记。
+
+        Returns:
+            工具返回的字典结果。
+
+        Raises:
+            Exception: 原样重新抛出工具抛出的异常。
+
+        Note:
+            span 属性记录 ``phase``（``dry_run``、``execute`` 或
+            ``compensation``）、订单与幂等键，即使工具失败也会提交，因此失败
+            的写入与补偿仍会出现在 trace 时间线上。
         """
 
         if arguments.get("dry_run") is True:
@@ -623,6 +783,21 @@ class TaskExecutor:
         *,
         dry_run: bool,
     ) -> dict[str, Any]:
+        """构造写入工具参数，并校验动作与计划参数的形状。
+
+        Args:
+            task: 提供租户、任务与操作者的任务。
+            node: 计划节点，必须包含受支持的 ``action``。
+            dry_run: 是否以 dry-run 模式调用。
+
+        Returns:
+            含 ``tenant_id``、``order_id``、幂等键 ``task_id:node_id``、
+            ``dry_run``、``task_id`` 与 ``actor_id`` 的参数；拆分节点附带
+            ``shipments``，改址节点附带 ``address``。
+
+        Raises:
+            ValueError: 动作不受支持，或拆分/改址节点缺少必需参数。
+        """
         action = node["action"]
         if action not in TOOL_NAMES:
             raise ValueError(f"unsupported write action {action!r}")
@@ -657,6 +832,20 @@ class TaskExecutor:
         node: dict[str, Any],
         output: dict[str, Any],
     ) -> dict[str, Any]:
+        """构造补偿工具参数。
+
+        Args:
+            task: 提供租户与任务标识的任务。
+            node: 被补偿的计划节点。
+            output: 原写入返回的结果，改址补偿需要其中的 ``before`` 快照。
+
+        Returns:
+            幂等键为 ``task_id:node_id:compensate`` 的参数；改址补偿额外携带
+            ``before_address``。
+
+        Raises:
+            ValueError: 改址节点缺少可用的 ``before`` 地址快照。
+        """
         arguments: dict[str, Any] = {
             "tenant_id": str(task.tenant_id),
             "order_id": str(node.get("order_id")),
@@ -695,6 +884,15 @@ class TaskExecutor:
 
     @staticmethod
     def _final_status(state: ExecutionState) -> str:
+        """把执行状态映射为最终 ``TaskStatus`` 值。
+
+        映射顺序：
+
+        - 存在补偿失败 -> ``partially_compensated``。
+        - 全部失败（无任何完成或补偿）-> ``failed``。
+        - 存在拒绝、跳过、失败或补偿 -> ``partially_succeeded``。
+        - 其余情况 -> ``succeeded``。
+        """
         if state.get("failed_compensations"):
             return TaskStatus.partially_compensated.value
         failed = state.get("failed") or []
@@ -733,6 +931,7 @@ class TaskExecutor:
     async def _existing_step(
         self, task_id: UUID, node_id: str
     ) -> TaskStep | None:
+        """返回租户内某任务某节点第一次尝试的步骤（``attempt == 1``）。"""
         return await self.session.scalar(
             select(TaskStep).where(
                 TaskStep.tenant_id == self.tenant_id,
@@ -748,6 +947,11 @@ class TaskExecutor:
         node: dict[str, Any],
         arguments: dict[str, Any],
     ) -> None:
+        """把节点步骤置为 ``running`` 并立即提交。
+
+        已存在的步骤会被重置输入、输出与错误，使其可安全重入；``started_at``
+        在每次开始时刷新。
+        """
         step = await self._existing_step(task.id, node["node_id"])
         now = _utcnow()
         payload = {"args": arguments}
@@ -822,6 +1026,7 @@ class TaskExecutor:
     async def _skip_step(
         self, task: TaskRun, node: dict[str, Any], reason: str
     ) -> None:
+        """把节点步骤标记为跳过，但不覆盖已经成功的步骤。"""
         step = await self._existing_step(task.id, node["node_id"])
         if step is not None and step.status == StepStatus.succeeded.value:
             return

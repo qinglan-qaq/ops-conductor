@@ -1,4 +1,15 @@
-"""Audit log helpers for actions performed by tasks and operators."""
+"""为任务与操作者执行的动作写审计记录。
+
+本模块的辅助函数只在调用方会话上暂存审计行并 flush，提交由调用方负责。唯一
+的例外是安全拒绝记录 :func:`write_access_denied`：它自行提交，保证拒绝行为
+即使在请求失败时也留下可追溯的记录。
+
+Invariants:
+
+- 每条审计行都携带 ``tenant_id``；``task_id`` 与 ``actor_id`` 可为 ``None``，
+  分别表示非任务动作与系统动作。
+- :func:`write_audit` 从不提交，审计行与外层业务变更同时可见或同时回滚。
+"""
 
 from typing import Any
 from uuid import UUID
@@ -25,10 +36,26 @@ async def write_audit(
     after: dict[str, Any] | None,
     evidence: dict[str, Any] | None,
 ) -> AuditLog:
-    """Stage an audit record on the caller's transaction and flush it.
+    """在调用方事务上暂存一条审计记录并 flush。
 
-    The caller owns the transaction: this helper never commits, so the audit
-    row is visible exactly when the surrounding business change is committed.
+    Args:
+        session: 调用方拥有的会话。
+        tenant_id: 审计行归属的租户。
+        task_id: 触发动作的任务；非任务动作可为 ``None``。
+        actor_id: 触发动作的用户；系统动作可为 ``None``。
+        action: 稳定的动作名，例如 ``order.split``。
+        entity_type: 被操作实体的类型名。
+        entity_id: 被操作实体的标识（通常是字符串化 UUID）。
+        before: 变更前快照；不适用时为 ``None``。
+        after: 变更后快照；不适用时为 ``None``。
+        evidence: 附加证据，例如来源、置信度或错误码。
+
+    Returns:
+        已加入会话的 :class:`AuditLog`，其 ``id`` 在 flush 后可用。
+
+    Note:
+        本函数从不提交。审计行恰好在外层业务变更提交时可见；调用方回滚时
+        审计行一并丢弃。
     """
 
     entry = AuditLog(
@@ -58,12 +85,25 @@ async def write_access_denied(
     reason: str,
     evidence: dict[str, Any] | None = None,
 ) -> AuditLog:
-    """Commit a security denial audit row and trace span.
+    """提交一条安全拒绝审计行，并记录对应的 trace span。
 
-    Denials are committed even though the surrounding request fails: an
-    attempted cross-tenant read or an unapproved write must leave an
-    attributable trail. ``tenant_id`` is the tenant that owns the targeted
-    resource (or the caller tenant for tool denials).
+    Args:
+        session: 调用方会话；本函数会在返回前提交它。
+        tenant_id: 目标资源所属租户；工具拒绝时为调用方租户。
+        actor_id: 被拒绝的调用方；匿名拒绝可为 ``None``。
+        task_id: 关联任务；与被拒绝请求无关时为 ``None``。
+        entity_type: 被访问实体的类型名。
+        entity_id: 被访问实体的标识。
+        reason: 拒绝原因。
+        evidence: 附加证据，会并入固定字段并覆盖同名默认值。
+
+    Returns:
+        已提交的 :class:`AuditLog`。
+
+    Note:
+        拒绝记录在请求失败时也必须保留：跨租户读取或未审批写入都要留下可归因
+        的痕迹。``evidence`` 中的同名键会覆盖默认的 ``code``、``denied`` 与
+        ``status_code``。本函数提交会话，调用方不应再依赖原事务状态。
     """
 
     entry = await write_audit(
