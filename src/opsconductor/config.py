@@ -21,7 +21,15 @@ class Settings(BaseSettings):
     llm_api_key: str | None = None
     llm_base_url: str | None = None
     llm_model: str | None = None
+    llm_model_planner: str = "gpt-4o-mini"
+    llm_model_router: str = "gpt-4o-mini"
+    llm_model_verifier: str = "gpt-4o-mini"
     embedding_model: str = "BAAI/bge-m3"
+    l3_batch_threshold: int = 10
+    approval_timeout_minutes: int = 30
+    stub_llm: bool = True
+    mcp_server_command: str = "python"
+    mcp_server_args: list[str] = ["-m", "opsconductor.tools.server"]
 
 
 @lru_cache
