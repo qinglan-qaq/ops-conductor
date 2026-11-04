@@ -20,6 +20,7 @@ from cases import (
     CATEGORY_APPROVAL,
     CATEGORY_INVENTORY,
     GOLDEN_CASES,
+    KNOWN_GAP_REASONS,
     SKU_IDS,
     ApprovalDirective,
     GoldenCase,
@@ -50,12 +51,13 @@ from opsconductor.domain.models import (
     TraceSpan,
 )
 from opsconductor.domain.seed import TENANT_A, TENANT_B, WAREHOUSE_EAST
-from opsconductor.observability.audit import write_audit
+from opsconductor.observability.audit import ACCESS_DENIED_ACTION
 from opsconductor.observability.trace import TraceRecorder
 from opsconductor.orchestrator.approval import ApprovalService
 from opsconductor.orchestrator.executor import ExecutionResult, TaskExecutor
 from opsconductor.orchestrator.verifier import VerificationResult, Verifier
 from opsconductor.tools import faults
+from opsconductor.tools.guard import ToolAccessDenied, require_approved_write
 from opsconductor.tools.service import ErpToolService
 
 TASK_URL = "/api/v1/tasks"
@@ -124,21 +126,6 @@ class ToolCall:
         return bool(self.arguments.get("dry_run"))
 
 
-class ToolAccessDenied(RuntimeError):
-    """Gateway denial with an HTTP-style status code and stable error code."""
-
-    def __init__(
-        self,
-        message: str,
-        *,
-        status_code: int = 403,
-        code: str = "PERMISSION_DENIED",
-    ) -> None:
-        super().__init__(message)
-        self.status_code = status_code
-        self.code = code
-
-
 class TraceSink:
     """Write committed trace spans around harness phases."""
 
@@ -175,10 +162,8 @@ class GoldenToolClient:
         *,
         trace: TraceSink,
         fault_policy: Iterable[ToolFault] = (),
-        enforce_tenant_guard: bool = False,
     ) -> None:
         self.trace = trace
-        self.enforce_tenant_guard = enforce_tenant_guard
         self.calls: list[ToolCall] = []
         self.errors: list[BaseException] = []
         self._faults = [
@@ -259,93 +244,26 @@ class GoldenToolClient:
     async def _authorize(
         self, name: str, arguments: dict[str, Any]
     ) -> None:
-        if name not in WRITE_TOOLS | COMPENSATION_TOOLS:
+        """Run the production approval guard for business write tools."""
+
+        if name not in WRITE_TOOLS:
             return
         tenant_id = _as_uuid(arguments.get("tenant_id"))
-        if tenant_id is None:
-            raise ToolAccessDenied(
-                "tenant_id is required", status_code=401, code="PERMISSION_DENIED"
-            )
-
         order_id_value = _as_uuid(arguments.get("order_id"))
-        if self.enforce_tenant_guard and order_id_value is not None:
-            async with SessionLocal() as session:
-                order = await session.get(SalesOrder, order_id_value)
-            if order is None:
-                await self._audit_denial(
-                    name, arguments, "order not found", "NOT_FOUND"
-                )
-                raise ToolAccessDenied(
-                    "order not found for this tenant",
-                    status_code=404,
-                    code="NOT_FOUND",
-                )
-            if order.tenant_id != tenant_id:
-                await self._audit_denial(
-                    name, arguments, "cross-tenant access", "PERMISSION_DENIED"
-                )
-                raise ToolAccessDenied(
-                    "order belongs to another tenant",
-                    status_code=403,
-                    code="PERMISSION_DENIED",
-                )
-
-        task_id = _as_uuid(arguments.get("task_id"))
-        if name in WRITE_TOOLS and task_id is not None:
-            action = ACTION_FOR_TOOL[name]
-            async with SessionLocal() as session:
-                approved = await session.scalar(
-                    select(Approval.id).where(
-                        Approval.tenant_id == tenant_id,
-                        Approval.task_id == task_id,
-                        Approval.order_id == order_id_value,
-                        Approval.action == action,
-                        Approval.status == ApprovalStatus.approved.value,
-                    )
-                )
-            if approved is None:
-                await self._audit_denial(
-                    name,
-                    arguments,
-                    "no approved approval for tool call",
-                    "PERMISSION_DENIED",
-                )
-                raise ToolAccessDenied(
-                    f"{name} requires an approved approval",
-                    status_code=403,
-                    code="PERMISSION_DENIED",
-                )
-
-    async def _audit_denial(
-        self,
-        name: str,
-        arguments: dict[str, Any],
-        reason: str,
-        code: str,
-    ) -> None:
-        tenant_id = _as_uuid(arguments.get("tenant_id"))
-        if tenant_id is None:
-            return
-        task_id = _as_uuid(arguments.get("task_id"))
-        actor_id = _as_uuid(arguments.get("actor_id"))
+        if tenant_id is None or order_id_value is None:
+            raise ToolAccessDenied(
+                "tenant_id and order_id are required for write tools",
+                status_code=403,
+            )
         async with SessionLocal() as session:
-            await write_audit(
+            await require_approved_write(
                 session,
                 tenant_id=tenant_id,
-                task_id=task_id,
-                actor_id=actor_id,
-                action="tool.denied",
-                entity_type="tool",
-                entity_id=name,
-                before=None,
-                after={
-                    "tool": name,
-                    "order_id": str(arguments.get("order_id") or ""),
-                    "reason": reason,
-                },
-                evidence={"code": code, "denied": True},
+                task_id=_as_uuid(arguments.get("task_id")),
+                order_id=order_id_value,
+                tool=name,
+                actor_id=_as_uuid(arguments.get("actor_id")),
             )
-            await session.commit()
 
     async def _invoke(
         self, name: str, arguments: dict[str, Any]
@@ -733,7 +651,6 @@ async def run_case(
     gateway = GoldenToolClient(
         trace=trace,
         fault_policy=case.fault_plan,
-        enforce_tenant_guard=case.driver == "security_cross_tenant",
     )
     run.gateway = gateway
 
@@ -868,6 +785,8 @@ async def _run_cross_tenant(
         headers={"X-API-Key": "dev-operator-b"},
     )
     run.denial_statuses.extend([forbidden.status_code, denied_approval.status_code])
+    assert forbidden.status_code == 403
+    assert denied_approval.status_code == 403
     assert "O1001" not in forbidden.text
     assert "世纪大道" not in forbidden.text
     assert "张三" not in forbidden.text
@@ -881,6 +800,7 @@ async def _run_cross_tenant(
                 "order_id": str(ORDER_IDS["O1001"]),
                 "shipments": _split_shipments("O1001"),
                 "idempotency_key": "cross-tenant-attempt",
+                "task_id": str(run.task_id),
             },
         )
     run.denial_statuses.append(excinfo.value.status_code)
@@ -989,6 +909,16 @@ async def _spans(task_id: UUID) -> list[TraceSpan]:
                 )
             ).all()
         )
+
+
+def _production_span_names(spans: list[TraceSpan]) -> set[str]:
+    """Return only spans written by production code, not the harness."""
+
+    return {
+        span.name
+        for span in spans
+        if (span.attributes or {}).get("source") == "production"
+    }
 
 
 async def _shipments(order_no: str, tenant_id: UUID = TENANT_A) -> list[Shipment]:
@@ -1108,11 +1038,20 @@ def _expected_audit_counts(case: GoldenCase) -> Counter[str]:
     return counts
 
 
+def _mark_known_gap(case: GoldenCase) -> None:
+    """Mark a case as an explicit xfail after its verifiable assertions run."""
+
+    reason = KNOWN_GAP_REASONS.get(case.id)
+    if reason is not None:
+        pytest.xfail(f"KNOWN GAP: {reason}")
+
+
 async def assert_case(case: GoldenCase, run: CaseRun) -> None:
     """Assert the spec's observable outcome for one golden task."""
 
     if case.driver == "creation_failure":
         await _assert_creation_failure(run)
+        _mark_known_gap(case)
         return
 
     assert run.task_id is not None
@@ -1120,6 +1059,7 @@ async def assert_case(case: GoldenCase, run: CaseRun) -> None:
 
     if case.driver == "concurrent":
         await _assert_concurrent(case, run, task)
+        _mark_known_gap(case)
         return
 
     if case.driver == "security_cross_tenant":
@@ -1140,6 +1080,11 @@ async def assert_case(case: GoldenCase, run: CaseRun) -> None:
         assert run.second_created is not None
         assert run.second_created["id"] == run.created["id"]
         assert await count_tasks() == 1
+    if case.id == "GT-24":
+        assert task.result is not None
+        assert task.result["failed"] == ["O1004-split_order"]
+        assert task.result["compensated"] == []
+        assert "O1004-split_order" in task.result["reason"]
     if case.id in {"GT-03", "GT-04"}:
         changed = await _order("O1002")
         assert changed is not None
@@ -1254,6 +1199,7 @@ async def assert_case(case: GoldenCase, run: CaseRun) -> None:
     await _assert_idempotency(case, run)
     await _assert_steps(case, run, task)
     await _assert_trace(case, run, trace_tenant=TENANT_A)
+    _mark_known_gap(case)
 
 
 async def _assert_creation_failure(run: CaseRun) -> None:
@@ -1458,13 +1404,21 @@ async def _assert_trace(
     case: GoldenCase, run: CaseRun, trace_tenant: UUID
 ) -> None:
     assert run.task_id is not None
-    spans = await _spans(run.task_id)
-    names = {span.name for span in spans}
+    names = _production_span_names(await _spans(run.task_id))
     assert "plan_task" in names
     if run.results:
-        assert "report" in names
+        assert "executor.load" in names
+        assert "executor.dry_run" in names
+        assert "executor.report" in names
+        # Dry-run failures route straight to report; only runs that reach the
+        # write phase produce execute/verify spans.
+        if case.expected_writes or case.id in {"GT-21", "GT-22", "GT-23"}:
+            assert "executor.execute" in names
+            assert "executor.verify" in names
     if case.approvals:
         assert "approval" in names
+    if case.expected_compensations:
+        assert "executor.compensate" in names
     if run.gateway is not None and any(
         call.arguments.get("task_id") for call in run.gateway.calls
     ):
@@ -1530,10 +1484,11 @@ async def _assert_concurrent(
         ]
     ) == 1
     for task_id in (run.task_id, run.second_task_id):
-        names = {span.name for span in await _spans(task_id)}
+        names = _production_span_names(await _spans(task_id))
         assert "plan_task" in names
         assert "approval" in names
-        assert "report" in names
+        assert "executor.dry_run" in names
+        assert "executor.report" in names
 
 
 async def _assert_security(
@@ -1558,12 +1513,30 @@ async def _assert_security(
         denial = await session.scalar(
             select(AuditLog).where(
                 AuditLog.tenant_id == tenant_id,
-                AuditLog.action == "tool.denied",
+                AuditLog.task_id == run.task_id,
+                AuditLog.action == ACCESS_DENIED_ACTION,
             )
         )
     assert denial is not None
     assert denial.evidence is not None
     assert denial.evidence["denied"] is True
+    assert denial.evidence["status_code"] == 403
+
+    if case.driver == "security_cross_tenant":
+        async with SessionLocal() as session:
+            api_denials = list(
+                (
+                    await session.scalars(
+                        select(AuditLog).where(
+                            AuditLog.tenant_id == TENANT_A,
+                            AuditLog.task_id == run.task_id,
+                            AuditLog.action == ACCESS_DENIED_ACTION,
+                            AuditLog.entity_type == "task",
+                        )
+                    )
+                ).all()
+            )
+        assert len(api_denials) >= 2
 
     approvals = await _approvals(run.task_id)
     assert approvals
@@ -1571,10 +1544,9 @@ async def _assert_security(
 
     assert await _action_idempotency(run.task_id) == []
 
-    spans = await _spans(run.task_id)
-    names = {span.name for span in spans}
-    assert "plan_task" in names
-    assert "security.denied" in names
+    production = _production_span_names(await _spans(run.task_id))
+    assert "plan_task" in production
+    assert "security.denied" in production
 
 
 def assert_case_table() -> None:

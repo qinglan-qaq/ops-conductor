@@ -6,7 +6,6 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +14,8 @@ from opsconductor.config import Settings, get_settings
 from opsconductor.db import get_session
 from opsconductor.domain.models import Approval, TaskRun
 from opsconductor.llm.gateway import HttpChatModel
+from opsconductor.observability.audit import write_access_denied
+from opsconductor.observability.trace import TraceRecorder
 from opsconductor.orchestrator.idempotency import (
     TASK_CREATE_SCOPE,
     IdempotencyConflict,
@@ -152,6 +153,19 @@ async def create_task(
     else:
         task.status = "planned"
 
+    async with TraceRecorder(session).start(
+        "plan_task",
+        task_id=task.id,
+        tenant_id=identity.tenant_id,
+        attributes={
+            "source": "production",
+            "status": task.status,
+            "nodes": len(plan.nodes),
+            "requires_l3": plan.requires_l3,
+        },
+    ):
+        pass
+
     read = TaskRead(
         id=task.id,
         status=task.status,
@@ -204,14 +218,24 @@ async def get_task(
     identity: Annotated[Identity, Depends(get_identity)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> TaskRead:
-    task = await session.scalar(
-        select(TaskRun).where(
-            TaskRun.id == task_id,
-            TaskRun.tenant_id == identity.tenant_id,
-        )
-    )
+    task = await session.get(TaskRun, task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="task not found")
+    if task.tenant_id != identity.tenant_id:
+        await write_access_denied(
+            session,
+            tenant_id=task.tenant_id,
+            actor_id=identity.user_id,
+            task_id=task.id,
+            entity_type="task",
+            entity_id=str(task.id),
+            reason="cross-tenant task access",
+            evidence={
+                "caller_tenant_id": str(identity.tenant_id),
+                "path": "GET /api/v1/tasks/{task_id}",
+            },
+        )
+        raise HTTPException(status_code=403, detail="forbidden")
     return TaskRead(
         id=task.id,
         status=task.status,

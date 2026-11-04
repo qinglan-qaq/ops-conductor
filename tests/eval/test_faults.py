@@ -93,3 +93,26 @@ async def test_erp_tool_client_checks_faults_before_calling_mcp():
             )
 
     assert [name for name, _ in session.calls] == ["order_get"]
+
+
+def test_timeout_after_commit_is_a_post_call_fault():
+    with faults.inject(order_split="timeout_after_commit"):
+        faults.check("order_split")
+        with pytest.raises(TimeoutError, match="timeout after commit"):
+            faults.check_after("order_split")
+        faults.check_after("order_change_address")
+
+
+@pytest.mark.asyncio
+async def test_erp_tool_client_raises_after_the_mcp_call_for_lost_response():
+    client = ErpToolClient()
+    session = RecordingSession()
+    client._session = session
+
+    with faults.inject(order_split="timeout_after_commit"):
+        with pytest.raises(TimeoutError, match="order_split timeout after commit"):
+            await client.call(
+                "order_split", {"tenant_id": "t", "order_id": "o"}
+            )
+
+    assert [name for name, _ in session.calls] == ["order_split"]

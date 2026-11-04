@@ -28,6 +28,7 @@ from opsconductor.config import get_settings
 from opsconductor.db import get_session
 from opsconductor.domain.models import Approval, SalesOrder, TaskRun, TraceSpan, User
 from opsconductor.domain.security import hash_api_key
+from opsconductor.observability.audit import write_access_denied
 from opsconductor.orchestrator.approval import ApprovalError, ApprovalService
 
 DEV_DEFAULT_API_KEY = "dev-operator-a"
@@ -73,14 +74,24 @@ def _auth_query(request: Request) -> str:
 async def _load_task(
     session: AsyncSession, identity: Identity, task_id: UUID
 ) -> TaskRun:
-    task = await session.scalar(
-        select(TaskRun).where(
-            TaskRun.id == task_id,
-            TaskRun.tenant_id == identity.tenant_id,
-        )
-    )
+    task = await session.get(TaskRun, task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="task not found")
+    if task.tenant_id != identity.tenant_id:
+        await write_access_denied(
+            session,
+            tenant_id=task.tenant_id,
+            actor_id=identity.user_id,
+            task_id=task.id,
+            entity_type="task",
+            entity_id=str(task.id),
+            reason="cross-tenant console task access",
+            evidence={
+                "caller_tenant_id": str(identity.tenant_id),
+                "path": "GET /console/tasks/{task_id}",
+            },
+        )
+        raise HTTPException(status_code=403, detail="forbidden")
     return task
 
 

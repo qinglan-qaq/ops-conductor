@@ -618,7 +618,10 @@ async def test_address_writes_are_tenant_scoped(seeded_db):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_mcp_address_tools_are_registered_and_execute(seeded_db):
+async def test_mcp_address_tools_are_registered_and_execute(
+    seeded_db, approved_task
+):
+    task_id = await approved_task(ORDER_O1002, "change_address")
     async with ErpToolClient() as client:
         listed = await client._session.list_tools()
         names = {tool.name for tool in listed.tools}
@@ -631,6 +634,7 @@ async def test_mcp_address_tools_are_registered_and_execute(seeded_db):
                 "order_id": str(ORDER_O1002),
                 "address": NEW_ADDRESS,
                 "idempotency_key": "mcp-change",
+                "task_id": str(task_id),
             },
         )
         assert changed["status"] == "updated"

@@ -2,16 +2,32 @@ import uuid
 from contextlib import asynccontextmanager
 
 import pytest
+from sqlalchemy import select
 
 from opsconductor.db import SessionLocal
+from opsconductor.domain.models import AuditLog
 from opsconductor.domain.seed import SKU_IDS, TENANT_A, TENANT_B, WAREHOUSE_EAST
 from opsconductor.tools import client as client_module
 from opsconductor.tools.client import ErpToolClient
+from opsconductor.tools.guard import ToolAccessDenied
 from opsconductor.tools.service import ErpToolService, address_is_valid
 
 
 def _order_id(order_no: str) -> uuid.UUID:
     return uuid.uuid5(uuid.NAMESPACE_DNS, f"opsconductor.order-{order_no}")
+
+
+def _shipments_o1001() -> list[dict]:
+    return [
+        {
+            "warehouse_id": str(WAREHOUSE_EAST),
+            "lines": [{"sku_id": str(SKU_IDS["SKU-001"]), "qty": 2}],
+        },
+        {
+            "warehouse_id": str(WAREHOUSE_EAST),
+            "lines": [{"sku_id": str(SKU_IDS["SKU-002"]), "qty": 1}],
+        },
+    ]
 
 
 @pytest.mark.asyncio
@@ -181,3 +197,36 @@ async def test_mcp_client_calls_read_tools_over_stdio(seeded_db):
     assert order["order_no"] == "O1001"
     assert order["receiver_name"] == "张三"
     assert [entry["order_no"] for entry in tenant_b_orders["orders"]] == ["O2001"]
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_mcp_write_tool_rejects_missing_approval_context(seeded_db):
+    async with ErpToolClient() as client:
+        with pytest.raises(ToolAccessDenied) as excinfo:
+            await client.call(
+                "order_split",
+                {
+                    "tenant_id": str(TENANT_A),
+                    "order_id": str(_order_id("O1001")),
+                    "shipments": _shipments_o1001(),
+                    "idempotency_key": "mcp-unapproved",
+                },
+            )
+    assert excinfo.value.status_code == 403
+
+    async with SessionLocal() as session:
+        audit = await session.scalar(
+            select(AuditLog).where(
+                AuditLog.tenant_id == TENANT_A,
+                AuditLog.action == "security.access_denied",
+                AuditLog.entity_type == "tool",
+            )
+        )
+        order = await ErpToolService(session).order_get(
+            TENANT_A, _order_id("O1001")
+        )
+    assert audit is not None
+    assert audit.evidence is not None
+    assert audit.evidence["status_code"] == 403
+    assert order["status"] == "pending_shipment"

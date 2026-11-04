@@ -331,12 +331,13 @@ async def test_cannot_decide_another_tenants_approval(seeded_db):
             json={"order_id": str(approval.order_id)},
         )
 
-    assert bulk.status_code == 404
-    assert targeted.status_code == 404
+    assert bulk.status_code == 403
+    assert targeted.status_code == 403
     approvals = await _approvals(task_id)
     assert {row.status for row in approvals} == {"pending"}
     assert (await _task(task_id)).status == "awaiting_approval"
-    assert await _audit_count(task_id) == 0
+    assert await _audit_count(task_id, "security.access_denied") == 2
+    assert await _audit_count(task_id) == 2
 
 
 @pytest.mark.asyncio

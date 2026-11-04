@@ -239,10 +239,10 @@ async def test_console_is_tenant_scoped(seeded_db):
         )
         foreign_list = await client.get(f"{CONSOLE_URL}?api_key=dev-operator-b")
 
-    assert foreign_detail.status_code == 404
-    assert foreign_trace.status_code == 404
-    assert foreign_approve.status_code == 404
-    assert foreign_reject.status_code == 404
+    assert foreign_detail.status_code == 403
+    assert foreign_trace.status_code == 403
+    assert foreign_approve.status_code == 403
+    assert foreign_reject.status_code == 403
     assert "O1001" not in foreign_detail.text
     assert foreign_list.status_code == 200
     assert "O1001" not in foreign_list.text
@@ -250,7 +250,8 @@ async def test_console_is_tenant_scoped(seeded_db):
     approvals = await _approvals(task_id)
     assert {approval.status for approval in approvals} == {"pending"}
     assert (await _task(task_id)).status == "awaiting_approval"
-    assert await _audit_count(task_id) == 0
+    assert await _audit_count(task_id, "security.access_denied") == 4
+    assert await _audit_count(task_id) == 4
 
     async with SessionLocal() as session:
         tenant_b_tasks = (

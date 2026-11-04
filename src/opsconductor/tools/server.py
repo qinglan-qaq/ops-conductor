@@ -4,8 +4,10 @@ from typing import Any
 from uuid import UUID
 
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
 from opsconductor.db import SessionLocal
+from opsconductor.tools.guard import ToolAccessDenied, require_approved_write
 from opsconductor.tools.service import ErpToolService
 
 server = MCPServer("opsconductor-erp")
@@ -74,9 +76,22 @@ async def order_split(
     """Split a pending order into shipments and reserve inventory atomically."""
 
     async with SessionLocal() as session:
+        tenant_uuid = UUID(tenant_id)
+        order_uuid = UUID(order_id)
+        try:
+            await require_approved_write(
+                session,
+                tenant_id=tenant_uuid,
+                task_id=_optional_uuid(task_id),
+                order_id=order_uuid,
+                tool="order_split",
+                actor_id=_optional_uuid(actor_id),
+            )
+        except ToolAccessDenied as exc:
+            raise ToolError(str(exc)) from exc
         return await ErpToolService(session).order_split(
-            UUID(tenant_id),
-            UUID(order_id),
+            tenant_uuid,
+            order_uuid,
             shipments,
             idempotency_key,
             dry_run=dry_run,
@@ -102,9 +117,22 @@ async def order_change_address(
     """
 
     async with SessionLocal() as session:
+        tenant_uuid = UUID(tenant_id)
+        order_uuid = UUID(order_id)
+        try:
+            await require_approved_write(
+                session,
+                tenant_id=tenant_uuid,
+                task_id=_optional_uuid(task_id),
+                order_id=order_uuid,
+                tool="order_change_address",
+                actor_id=_optional_uuid(actor_id),
+            )
+        except ToolAccessDenied as exc:
+            raise ToolError(str(exc)) from exc
         return await ErpToolService(session).order_change_address(
-            UUID(tenant_id),
-            UUID(order_id),
+            tenant_uuid,
+            order_uuid,
             address,
             idempotency_key,
             dry_run=dry_run,

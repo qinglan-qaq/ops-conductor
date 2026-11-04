@@ -783,7 +783,10 @@ async def test_write_operations_never_touch_foreign_tenant_data(seeded_db):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_mcp_write_tools_are_registered_and_complete_compensation_cycle(seeded_db):
+async def test_mcp_write_tools_are_registered_and_complete_compensation_cycle(
+    seeded_db, approved_task
+):
+    task_id = await approved_task(ORDER_O1001, "split_order")
     async with ErpToolClient() as client:
         listed = await client._session.list_tools()
         names = {tool.name for tool in listed.tools}
@@ -802,6 +805,7 @@ async def test_mcp_write_tools_are_registered_and_complete_compensation_cycle(se
                 "shipments": _shipments_o1001(),
                 "idempotency_key": "mcp-dry",
                 "dry_run": True,
+                "task_id": str(task_id),
             },
         )
         assert dry["dry_run"] is True
@@ -815,6 +819,7 @@ async def test_mcp_write_tools_are_registered_and_complete_compensation_cycle(se
                 "shipments": _shipments_o1001(),
                 "idempotency_key": "mcp-split",
                 "dry_run": False,
+                "task_id": str(task_id),
             },
         )
         assert split["status"] == "split"

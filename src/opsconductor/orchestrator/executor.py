@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from opsconductor.domain.enums import ApprovalStatus, StepStatus, TaskStatus
 from opsconductor.domain.models import Approval, TaskRun, TaskStep
+from opsconductor.observability.trace import TraceRecorder
 from opsconductor.orchestrator.graph import ExecutionState, build_graph
 from opsconductor.orchestrator.verifier import Verifier
 
@@ -29,6 +30,7 @@ COMPENSATION_TOOLS = {
     "split_order": "order_revert_split",
     "change_address": "order_revert_address",
 }
+COMPENSATION_TOOL_NAMES = frozenset(COMPENSATION_TOOLS.values())
 UNRESOLVED_APPROVAL_STATUSES = {
     ApprovalStatus.pending.value,
     ApprovalStatus.expired.value,
@@ -63,6 +65,47 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+class _TracedNodes:
+    """Wrap every graph node with a committed production trace span."""
+
+    def __init__(self, executor: "TaskExecutor") -> None:
+        self._executor = executor
+
+    async def _run(
+        self, name: str, state: ExecutionState, node: Any
+    ) -> dict[str, Any]:
+        task_id = UUID(state["task_id"])
+        async with TraceRecorder(self._executor.session).start(
+            name,
+            task_id=task_id,
+            tenant_id=self._executor.tenant_id,
+            attributes={"source": "production", "node": name},
+        ):
+            result = await node(state)
+        await self._executor.session.commit()
+        return result
+
+    async def load(self, state: ExecutionState) -> dict[str, Any]:
+        return await self._run("executor.load", state, self._executor.load)
+
+    async def dry_run(self, state: ExecutionState) -> dict[str, Any]:
+        return await self._run("executor.dry_run", state, self._executor.dry_run)
+
+    async def execute(self, state: ExecutionState) -> dict[str, Any]:
+        return await self._run("executor.execute", state, self._executor.execute)
+
+    async def verify(self, state: ExecutionState) -> dict[str, Any]:
+        return await self._run("executor.verify", state, self._executor.verify)
+
+    async def compensate(self, state: ExecutionState) -> dict[str, Any]:
+        return await self._run(
+            "executor.compensate", state, self._executor.compensate
+        )
+
+    async def report(self, state: ExecutionState) -> dict[str, Any]:
+        return await self._run("executor.report", state, self._executor.report)
+
+
 class TaskExecutor:
     """Run approved plan nodes through the LangGraph execution state machine.
 
@@ -82,7 +125,7 @@ class TaskExecutor:
         self.tool_client = tool_client
         self.tenant_id = UUID(str(tenant_id))
         self.verifier = verifier or Verifier(session)
-        self._graph = build_graph(self)
+        self._graph = build_graph(_TracedNodes(self))
 
     async def start(self, task_id: UUID | str) -> ExecutionResult:
         """Execute a task whose approval decisions are already resolved."""
@@ -260,7 +303,7 @@ class TaskExecutor:
                 continue
             await self._begin_step(task, node, arguments)
             try:
-                await self.tool_client.call(tool, arguments)
+                await self._call_tool(task, tool, arguments)
             except Exception as exc:  # noqa: BLE001 - any tool error is a node failure
                 await self._fail_step(task, node, arguments, f"dry run failed: {exc}")
                 failed.append(node_id)
@@ -297,7 +340,7 @@ class TaskExecutor:
         succeeded = list(state.get("succeeded") or [])
         failed = list(state.get("failed") or [])
         skipped_writes = list(state.get("skipped_writes") or [])
-        aborted: str | None = None
+        failed_orders: set[str] = set()
 
         for node_id in state.get("executable", []):
             node = plan_by_id.get(node_id)
@@ -308,9 +351,12 @@ class TaskExecutor:
                 continue
             if node_id in failed:
                 continue
-            if aborted is not None:
+            order_key = str(node.get("order_id"))
+            if order_key in failed_orders:
                 await self._skip_step(
-                    task, node, f"not executed after failure: {aborted}"
+                    task,
+                    node,
+                    f"not executed after failure for order {order_key}",
                 )
                 skipped_writes.append(node_id)
                 continue
@@ -321,17 +367,17 @@ class TaskExecutor:
             except Exception as exc:  # malformed plan node
                 await self._fail_step(task, node, {}, f"execution failed: {exc}")
                 failed.append(node_id)
-                aborted = str(exc)
+                failed_orders.add(order_key)
                 continue
             await self._begin_step(task, node, arguments)
             try:
-                output = await self.tool_client.call(tool, arguments)
+                output = await self._call_tool(task, tool, arguments)
             except Exception as exc:  # noqa: BLE001 - any tool error is a node failure
                 await self._fail_step(
                     task, node, arguments, f"execution failed: {exc}"
                 )
                 failed.append(node_id)
-                aborted = str(exc)
+                failed_orders.add(order_key)
                 continue
 
             await self._succeed_step(task, node, output)
@@ -417,7 +463,13 @@ class TaskExecutor:
         return {"verified": result.passed, "verification_reason": result.reason}
 
     async def compensate(self, state: ExecutionState) -> dict[str, Any]:
-        """Compensate completed write nodes in reverse execution order."""
+        """Compensate completed writes for orders that failed execution.
+
+        A verification failure is global, so every completed write is
+        compensated. A write/execution failure is order-scoped: only completed
+        nodes for the failed order are compensated, and successful orders keep
+        their writes.
+        """
 
         completed = state.get("completed") or []
         if not completed:
@@ -426,6 +478,21 @@ class TaskExecutor:
         if task is None:
             return {}
         plan_by_id = self._plan_by_id(state)
+        failed = state.get("failed") or []
+        if failed:
+            failed_orders = {
+                str(plan_by_id[node_id].get("order_id"))
+                for node_id in failed
+                if node_id in plan_by_id
+            }
+            completed = [
+                node_id
+                for node_id in completed
+                if node_id in plan_by_id
+                and str(plan_by_id[node_id].get("order_id")) in failed_orders
+            ]
+            if not completed:
+                return {}
         results = dict(state.get("results") or {})
         compensated: list[str] = []
         failures: list[str] = []
@@ -445,7 +512,7 @@ class TaskExecutor:
                 continue
             try:
                 arguments = self._compensation_arguments(task, node, output)
-                compensation = await self.tool_client.call(tool, arguments)
+                compensation = await self._call_tool(task, tool, arguments)
             except Exception as exc:  # noqa: BLE001 - compensation failure is recorded
                 await self._compensation_failed_step(task, node, output, str(exc))
                 failures.append(node_id)
@@ -491,6 +558,56 @@ class TaskExecutor:
             str(node["node_id"]): node
             for node in state.get("plan", {}).get("nodes", [])
         }
+
+    async def _call_tool(
+        self, task: TaskRun, tool: str, arguments: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Call one ERP tool and commit a production tool span for it.
+
+        The span is committed even when the tool raises, so failed writes and
+        failed compensations remain visible in the trace timeline.
+        """
+
+        if arguments.get("dry_run") is True:
+            phase = "dry_run"
+        elif tool in COMPENSATION_TOOL_NAMES:
+            phase = "compensation"
+        else:
+            phase = "execute"
+        attributes = {
+            "source": "production",
+            "phase": phase,
+            "tool": tool,
+            "order_id": str(arguments.get("order_id") or ""),
+            "idempotency_key": str(arguments.get("idempotency_key") or ""),
+        }
+        error: Exception | None = None
+        result: dict[str, Any] | None = None
+        async with TraceRecorder(self.session).start(
+            f"tool.{tool}",
+            task_id=task.id,
+            tenant_id=self.tenant_id,
+            attributes=attributes,
+        ) as span:
+            try:
+                result = await self.tool_client.call(tool, arguments)
+            except Exception as exc:
+                error = exc
+                span.attributes = {
+                    **(span.attributes or {}),
+                    "status": "error",
+                    "error": str(exc)[:200],
+                }
+            else:
+                span.attributes = {
+                    **(span.attributes or {}),
+                    "status": "ok",
+                }
+        await self.session.commit()
+        if error is not None:
+            raise error
+        assert result is not None
+        return result
 
     def _write_arguments(
         self,

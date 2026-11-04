@@ -39,3 +39,50 @@ async def seeded_db(test_engine):
     async with SessionLocal() as session:
         await seed(session)
     yield
+
+
+@pytest_asyncio.fixture
+async def approved_task(seeded_db):
+    """Create a running task with one approved write approval for MCP tests."""
+
+    from datetime import UTC, datetime, timedelta
+    from uuid import NAMESPACE_DNS, uuid4, uuid5
+
+    from opsconductor.db import SessionLocal
+    from opsconductor.domain.models import Approval, TaskRun
+    from opsconductor.domain.seed import TENANT_A
+
+    operator_id = uuid5(NAMESPACE_DNS, "opsconductor.user-operator-a")
+
+    async def create(order_id, action: str):
+        task_id = uuid4()
+        now = datetime.now(UTC)
+        async with SessionLocal() as session:
+            session.add(
+                TaskRun(
+                    id=task_id,
+                    tenant_id=TENANT_A,
+                    user_id=operator_id,
+                    task_type="order_exception",
+                    instruction="MCP approval fixture",
+                    status="running",
+                )
+            )
+            await session.flush()
+            session.add(
+                Approval(
+                    tenant_id=TENANT_A,
+                    task_id=task_id,
+                    order_id=order_id,
+                    action=action,
+                    risk_level="L2",
+                    status="approved",
+                    approver_id=operator_id,
+                    expires_at=now + timedelta(minutes=30),
+                    decided_at=now,
+                )
+            )
+            await session.commit()
+        return task_id
+
+    return create

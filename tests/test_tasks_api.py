@@ -10,7 +10,7 @@ from sqlalchemy import select
 from opsconductor.api.main import app
 from opsconductor.config import get_settings
 from opsconductor.db import SessionLocal
-from opsconductor.domain.models import Approval, IdempotencyKey, TaskRun
+from opsconductor.domain.models import Approval, AuditLog, IdempotencyKey, TaskRun
 from opsconductor.domain.seed import TENANT_A
 
 TASK_URL = "/api/v1/tasks"
@@ -105,8 +105,22 @@ async def test_get_task_is_tenant_scoped(seeded_db):
         assert same_tenant.json()["id"] == task_id
         assert same_tenant.json()["instruction"] == BODY["instruction"]
         assert same_tenant.json()["plan"] is not None
-        assert foreign_tenant.status_code == 404
+        assert foreign_tenant.status_code == 403
+        assert "O1001" not in foreign_tenant.text
         assert unknown.status_code == 404
+
+    async with SessionLocal() as session:
+        denial = await session.scalar(
+            select(AuditLog).where(
+                AuditLog.tenant_id == TENANT_A,
+                AuditLog.task_id == UUID(task_id),
+                AuditLog.action == "security.access_denied",
+                AuditLog.entity_type == "task",
+            )
+        )
+    assert denial is not None
+    assert denial.evidence is not None
+    assert denial.evidence["status_code"] == 403
 
 
 @pytest.mark.asyncio

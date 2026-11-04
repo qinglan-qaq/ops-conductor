@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from opsconductor.domain.enums import ApprovalStatus, RiskLevel, TaskStatus
 from opsconductor.domain.models import Approval, TaskRun
-from opsconductor.observability.audit import write_audit
+from opsconductor.observability.audit import write_access_denied, write_audit
+from opsconductor.observability.trace import TraceRecorder
 
 
 class ApprovalActor(Protocol):
@@ -83,6 +84,26 @@ class ApprovalService:
         try:
             task = await self._load_task(task_id, identity.tenant_id)
             if task is None:
+                foreign = await self.session.scalar(
+                    select(TaskRun).where(TaskRun.id == task_id)
+                )
+                if foreign is not None:
+                    await write_access_denied(
+                        self.session,
+                        tenant_id=foreign.tenant_id,
+                        actor_id=identity.user_id,
+                        task_id=foreign.id,
+                        entity_type="task",
+                        entity_id=str(foreign.id),
+                        reason="cross-tenant approval access",
+                        evidence={
+                            "caller_tenant_id": str(identity.tenant_id),
+                            "endpoint": "approval.decide",
+                        },
+                    )
+                    raise ApprovalForbidden(
+                        f"task {task_id} belongs to another tenant"
+                    )
                 raise ApprovalNotFound(f"task {task_id} not found")
 
             approvals = await self._load_approvals(
@@ -96,7 +117,7 @@ class ApprovalService:
                 raise ApprovalNotFound(f"task {task_id} has no approvals")
 
             if order_id is not None:
-                return await self._decide_targeted(
+                result = await self._decide_targeted(
                     task,
                     approvals,
                     identity,
@@ -105,18 +126,44 @@ class ApprovalService:
                     comment,
                     now,
                 )
-            return await self._decide_pending(
-                task,
-                approvals,
-                identity,
-                desired,
-                audit_action,
-                comment,
-                now,
-            )
+            else:
+                result = await self._decide_pending(
+                    task,
+                    approvals,
+                    identity,
+                    desired,
+                    audit_action,
+                    comment,
+                    now,
+                )
+            await self._record_decision_span(task, identity, approved, order_id)
+            return result
         except BaseException:
             await self.session.rollback()
             raise
+
+    async def _record_decision_span(
+        self,
+        task: TaskRun,
+        identity: ApprovalActor,
+        approved: bool,
+        order_id: UUID | None,
+    ) -> None:
+        """Persist a production approval span after the decision commits."""
+
+        async with TraceRecorder(self.session).start(
+            "approval",
+            task_id=task.id,
+            tenant_id=identity.tenant_id,
+            attributes={
+                "source": "production",
+                "approved": approved,
+                "order_id": str(order_id) if order_id is not None else None,
+                "role": identity.role,
+            },
+        ):
+            pass
+        await self.session.commit()
 
     async def _load_task(self, task_id: UUID, tenant_id: UUID) -> TaskRun | None:
         return await self.session.scalar(
