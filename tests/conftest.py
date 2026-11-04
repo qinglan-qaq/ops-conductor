@@ -8,9 +8,10 @@ if sys.platform == "win32":
 
 # The test database must be configured before opsconductor.config / opsconductor.db
 # are imported, because the module-level engine binds the URL at import time.
-# Tests use the Dockerized PostgreSQL instance from docker-compose.yml.
+# Tests use the Dockerized PostgreSQL instance from docker-compose.yml, which maps
+# container port 5432 to host port 15432.
 os.environ["OPSCONDUCTOR_DATABASE_URL"] = (
-    "postgresql+psycopg://ops:ops@localhost:5432/opsconductor_test"
+    "postgresql+psycopg://ops:ops@localhost:15432/opsconductor_test"
 )
 
 import pytest_asyncio  # noqa: E402
