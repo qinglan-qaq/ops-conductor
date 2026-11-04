@@ -1,0 +1,147 @@
+{% extends "console/base.html" %}
+{% block title %}任务详情 - OpsConductor 控制台{% endblock %}
+{% block content %}
+<p class="muted"><a href="/console/tasks{{ auth_query }}">← 返回任务列表</a></p>
+<h1>{{ task.instruction }}</h1>
+
+<dl class="meta">
+  <div><dt>任务 ID</dt><dd><code>{{ task.id }}</code></dd></div>
+  <div><dt>状态</dt><dd><span class="status status-{{ task.status }}">{{ task.status }}</span></dd></div>
+  <div><dt>类型</dt><dd>{{ task.task_type }}</dd></div>
+  <div><dt>创建时间</dt><dd>{{ task.created_at }}</dd></div>
+</dl>
+
+<section>
+  <h2>计划</h2>
+  <p>{{ plan.summary or "暂无计划摘要。" }}</p>
+  {% if nodes %}
+  <table>
+    <thead>
+      <tr>
+        <th>节点</th>
+        <th>订单</th>
+        <th>动作</th>
+        <th>风险</th>
+        <th>需审批</th>
+        <th>依赖</th>
+        <th>原因 / 证据</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for node in nodes %}
+      <tr>
+        <td><code>{{ node.node_id }}</code></td>
+        <td>{{ node.order_no or node.order_id or "-" }}</td>
+        <td>{{ node.action }}</td>
+        <td><span class="risk risk-{{ node.risk }}">{{ node.risk }}</span></td>
+        <td>{{ "是" if node.requires_approval else "否" }}</td>
+        <td>{{ node.depends_on | join(", ") if node.depends_on else "-" }}</td>
+        <td>
+          {% if node.reason %}<div>原因：{{ node.reason }}</div>{% endif %}
+          {% if node.evidence %}<pre>{{ node.evidence | tojson(indent=2) }}</pre>{% endif %}
+          {% if not node.reason and not node.evidence %}-{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">计划中没有节点。</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>审批</h2>
+  {% if approval_rows %}
+  <table>
+    <thead>
+      <tr>
+        <th>订单</th>
+        <th>动作</th>
+        <th>风险</th>
+        <th>状态</th>
+        <th>审批人</th>
+        <th>意见</th>
+        <th>过期 / 决策时间</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in approval_rows %}
+      <tr>
+        <td>{{ row.order_no or row.approval.order_id or "-" }}</td>
+        <td>{{ row.approval.action }}</td>
+        <td><span class="risk risk-{{ row.approval.risk_level }}">{{ row.approval.risk_level }}</span></td>
+        <td><span class="status status-{{ row.approval.status }}">{{ row.approval.status }}</span></td>
+        <td>{{ row.approver or "-" }}</td>
+        <td>{{ row.approval.comment or "-" }}</td>
+        <td class="muted">
+          过期：{{ row.approval.expires_at }}<br>
+          决策：{{ row.approval.decided_at or "未决策" }}
+        </td>
+        <td>
+          <div class="actions">
+            <form method="post" action="/console/tasks/{{ task.id }}/approve{{ auth_query }}">
+              <input type="hidden" name="order_id" value="{{ row.approval.order_id }}">
+              <input type="text" name="comment" placeholder="意见（可选）">
+              <button type="submit">通过</button>
+            </form>
+            <form method="post" action="/console/tasks/{{ task.id }}/reject{{ auth_query }}">
+              <input type="hidden" name="order_id" value="{{ row.approval.order_id }}">
+              <input type="text" name="comment" placeholder="意见（可选）">
+              <button type="submit" class="secondary">拒绝</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="bulk">
+    <form method="post" action="/console/tasks/{{ task.id }}/approve{{ auth_query }}">
+      <input type="text" name="comment" placeholder="批量通过意见（可选）">
+      <button type="submit">全部通过</button>
+    </form>
+    <form method="post" action="/console/tasks/{{ task.id }}/reject{{ auth_query }}">
+      <input type="text" name="comment" placeholder="批量拒绝意见（可选）">
+      <button type="submit" class="secondary">全部拒绝</button>
+    </form>
+  </div>
+  {% else %}
+  <p class="empty">暂无审批记录。</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Trace 时间线</h2>
+  <p class="muted"><a href="/console/tasks/{{ task.id }}/trace{{ auth_query }}">查看完整 trace</a></p>
+  {% if spans %}
+  <table>
+    <thead>
+      <tr>
+        <th>名称</th>
+        <th>span_id</th>
+        <th>开始</th>
+        <th>结束</th>
+        <th>属性</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for span in spans %}
+      <tr>
+        <td>{{ span.name }}</td>
+        <td><code>{{ span.span_id }}</code></td>
+        <td class="muted">{{ span.started_at }}</td>
+        <td class="muted">{{ span.ended_at or "未结束" }}</td>
+        <td>
+          {% if span.attributes %}<pre>{{ span.attributes | tojson(indent=2) }}</pre>{% else %}-{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">暂无 trace 数据。</p>
+  {% endif %}
+</section>
+{% endblock %}

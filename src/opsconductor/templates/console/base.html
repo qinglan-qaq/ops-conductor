@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}OpsConductor 控制台{% endblock %}</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --border: #d9dee7;
+      --muted: #64748b;
+      --accent: #2563eb;
+      --bg: #f6f8fb;
+      --surface: #ffffff;
+      --ok: #15803d;
+      --warn: #b45309;
+      --danger: #b91c1c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: #1f2937;
+      line-height: 1.5;
+    }
+    header.topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.9rem 1.5rem;
+      background: #0f172a;
+      color: #f8fafc;
+    }
+    header.topbar a { color: inherit; text-decoration: none; font-weight: 600; }
+    header.topbar .hint { color: #94a3b8; font-size: 0.8rem; }
+    main { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+    h1 { font-size: 1.5rem; margin: 0.4rem 0 0.8rem; }
+    h2 { font-size: 1.1rem; margin: 0 0 0.6rem; }
+    section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td {
+      border-bottom: 1px solid var(--border);
+      padding: 0.5rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f1f5f9; font-weight: 600; white-space: nowrap; }
+    tr:last-child td { border-bottom: none; }
+    code, pre {
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-size: 0.82rem;
+    }
+    pre {
+      margin: 0.3rem 0 0;
+      padding: 0.5rem;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .muted { color: var(--muted); }
+    .empty { color: var(--muted); margin: 0; }
+    .status, .risk {
+      display: inline-block;
+      padding: 0.1rem 0.45rem;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      background: #e2e8f0;
+      color: #334155;
+    }
+    .status-awaiting_approval, .risk-L3 { background: #fef3c7; color: var(--warn); }
+    .status-running, .status-planned { background: #dbeafe; color: var(--accent); }
+    .status-succeeded, .status-approved { background: #dcfce7; color: var(--ok); }
+    .status-failed, .status-rejected { background: #fee2e2; color: var(--danger); }
+    .status-expired { background: #e5e7eb; color: #4b5563; }
+    .risk-L2 { background: #ffedd5; color: var(--warn); }
+    .risk-L0, .risk-L1 { background: #dcfce7; color: var(--ok); }
+    dl.meta { display: flex; flex-wrap: wrap; gap: 1.5rem; margin: 0 0 1rem; }
+    dl.meta dt { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; }
+    dl.meta dd { margin: 0.1rem 0 0; }
+    form { margin: 0; }
+    input[type="text"] {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.3rem 0.5rem;
+      font-size: 0.85rem;
+      max-width: 100%;
+    }
+    button {
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: #ffffff;
+      border-radius: 6px;
+      padding: 0.3rem 0.7rem;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: #ffffff;
+      color: var(--danger);
+      border-color: var(--danger);
+    }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .bulk { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.8rem; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <a href="/console/tasks{{ auth_query }}">OpsConductor 控制台</a>
+    <span class="hint">本地演示认证：api_key 查询参数（开发环境允许缺省）</span>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

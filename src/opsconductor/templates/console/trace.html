@@ -1,0 +1,42 @@
+{% extends "console/base.html" %}
+{% block title %}Trace 时间线 - OpsConductor 控制台{% endblock %}
+{% block content %}
+<p class="muted"><a href="/console/tasks/{{ task.id }}{{ auth_query }}">← 返回任务详情</a></p>
+<h1>Trace 时间线</h1>
+<p class="muted">任务：{{ task.instruction }}</p>
+
+<section>
+  {% if spans %}
+  <table>
+    <thead>
+      <tr>
+        <th>名称</th>
+        <th>trace_id</th>
+        <th>span_id</th>
+        <th>parent_span_id</th>
+        <th>开始</th>
+        <th>结束</th>
+        <th>属性</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for span in spans %}
+      <tr>
+        <td>{{ span.name }}</td>
+        <td><code>{{ span.trace_id }}</code></td>
+        <td><code>{{ span.span_id }}</code></td>
+        <td><code>{{ span.parent_span_id or "-" }}</code></td>
+        <td class="muted">{{ span.started_at }}</td>
+        <td class="muted">{{ span.ended_at or "未结束" }}</td>
+        <td>
+          {% if span.attributes %}<pre>{{ span.attributes | tojson(indent=2) }}</pre>{% else %}-{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">暂无 trace 数据。</p>
+  {% endif %}
+</section>
+{% endblock %}
