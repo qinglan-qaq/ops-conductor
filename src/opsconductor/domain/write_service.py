@@ -21,6 +21,7 @@ from opsconductor.domain.models import (
     IdempotencyKey,
     Inventory,
     InventoryLedger,
+    OrderLine,
     SalesOrder,
     Shipment,
     ShipmentLine,
@@ -39,6 +40,10 @@ __all__ = [
     "release_inventory",
     "split_order",
 ]
+
+SPLIT_RESERVATION_REASON = "order_split"
+SPLIT_COMPENSATION_REASON = "split_compensation"
+_RESERVATION_REASONS = (SPLIT_RESERVATION_REASON, SPLIT_COMPENSATION_REASON)
 
 
 class WriteError(Exception):
@@ -228,6 +233,73 @@ async def _lock_inventory(
     )
 
 
+async def _validate_shipment_coverage(
+    session: AsyncSession,
+    tenant_id: UUID,
+    order_id: UUID,
+    shipments: list[dict[str, Any]],
+) -> None:
+    """Require shipment lines to match the order lines exactly as a multiset.
+
+    Every order SKU must be shipped in full, and no SKU outside the order may
+    appear. This runs before inventory is locked or any row is staged, so an
+    under-shipment or foreign SKU can never move an order into ``split``.
+    """
+
+    order_lines = list(
+        (
+            await session.scalars(
+                select(OrderLine).where(
+                    OrderLine.tenant_id == tenant_id,
+                    OrderLine.order_id == order_id,
+                )
+            )
+        ).all()
+    )
+    expected: dict[UUID, int] = defaultdict(int)
+    for line in order_lines:
+        expected[line.sku_id] += line.qty
+
+    shipped: dict[UUID, int] = defaultdict(int)
+    for entry in shipments:
+        for line in entry["lines"]:
+            shipped[line["sku_id"]] += line["qty"]
+
+    if dict(shipped) == dict(expected):
+        return
+
+    missing = {
+        sku_id: expected[sku_id] - shipped.get(sku_id, 0)
+        for sku_id in expected
+        if shipped.get(sku_id, 0) < expected[sku_id]
+    }
+    extra = {
+        sku_id: shipped[sku_id] - expected.get(sku_id, 0)
+        for sku_id in shipped
+        if shipped[sku_id] > expected.get(sku_id, 0)
+    }
+    details: list[str] = []
+    if missing:
+        details.append(
+            "missing "
+            + ", ".join(
+                f"SKU {sku_id} qty {qty}"
+                for sku_id, qty in sorted(missing.items(), key=lambda item: str(item[0]))
+            )
+        )
+    if extra:
+        details.append(
+            "unexpected "
+            + ", ".join(
+                f"SKU {sku_id} qty {qty}"
+                for sku_id, qty in sorted(extra.items(), key=lambda item: str(item[0]))
+            )
+        )
+    raise ValidationError(
+        f"shipments do not match order {order_id} lines: " + "; ".join(details)
+    )
+
+
 async def _plan_inventory(
     session: AsyncSession,
     tenant_id: UUID,
@@ -294,12 +366,56 @@ async def _release_shipment_stock(
     shipment: Shipment,
     task_id: UUID | None,
 ) -> list[dict[str, Any]]:
-    """Release one shipment's reservation back into available stock."""
+    """Release one shipment's reservation back into available stock.
+
+    Only ledger rows attributed to this exact order and shipment are released.
+    The net attributed reservation must still equal the shipment lines;
+    otherwise the release fails closed instead of consuming aggregate
+    ``inventory.reserved`` that may belong to another order.
+    """
 
     lines = await _shipment_lines(session, tenant_id, shipment.id)
+    if not lines:
+        raise InvalidState(f"shipment {shipment.id} has no lines")
+
     demand: dict[UUID, int] = defaultdict(int)
     for line in lines:
         demand[line.sku_id] += line.qty
+
+    ledger_rows = list(
+        (
+            await session.scalars(
+                select(InventoryLedger).where(
+                    InventoryLedger.tenant_id == tenant_id,
+                    InventoryLedger.order_id == shipment.order_id,
+                    InventoryLedger.shipment_id == shipment.id,
+                    InventoryLedger.reason.in_(_RESERVATION_REASONS),
+                )
+            )
+        ).all()
+    )
+    if not ledger_rows:
+        raise InvalidState(
+            f"no reservation ledger for shipment {shipment.id}; refusing to "
+            "release aggregate inventory"
+        )
+
+    balance: dict[UUID, int] = defaultdict(int)
+    for row in ledger_rows:
+        if row.warehouse_id != shipment.warehouse_id:
+            raise InvalidState(
+                f"reservation ledger for shipment {shipment.id} references "
+                f"warehouse {row.warehouse_id}, expected {shipment.warehouse_id}"
+            )
+        balance[row.sku_id] += row.delta_reserved
+
+    if set(balance) != set(demand) or any(
+        balance[sku_id] != qty for sku_id, qty in demand.items()
+    ):
+        raise InvalidState(
+            f"reservation ledger for shipment {shipment.id} does not match "
+            "shipment lines"
+        )
 
     inventory_rows: dict[UUID, Inventory] = {}
     for sku_id in sorted(demand, key=str):
@@ -328,11 +444,13 @@ async def _release_shipment_stock(
         session.add(
             InventoryLedger(
                 tenant_id=tenant_id,
+                order_id=shipment.order_id,
+                shipment_id=shipment.id,
                 sku_id=line.sku_id,
                 warehouse_id=shipment.warehouse_id,
                 delta_available=line.qty,
                 delta_reserved=-line.qty,
-                reason="split_compensation",
+                reason=SPLIT_COMPENSATION_REASON,
                 task_id=task_id,
             )
         )
@@ -414,6 +532,9 @@ async def split_order(
         if existing_shipment is not None:
             raise InvalidState(f"order {order_id} already has shipments")
 
+        await _validate_shipment_coverage(
+            session, tenant_id, order_id, normalized
+        )
         inventory_rows, impact = await _plan_inventory(
             session, tenant_id, normalized
         )
@@ -443,6 +564,20 @@ async def split_order(
                 )
             )
             for line in entry["lines"]:
+                session.add(
+                    ShipmentLine(
+                        tenant_id=tenant_id,
+                        shipment_id=shipment_id,
+                        sku_id=line["sku_id"],
+                        qty=line["qty"],
+                    )
+                )
+        # Ledger rows reference shipments by FK; flush the parents first because
+        # the models declare plain columns rather than ORM relationships.
+        await session.flush()
+
+        for entry, shipment_id in zip(normalized, shipment_ids, strict=True):
+            for line in entry["lines"]:
                 inventory = inventory_rows[
                     (entry["warehouse_id"], line["sku_id"])
                 ]
@@ -452,20 +587,14 @@ async def split_order(
                 session.add(
                     InventoryLedger(
                         tenant_id=tenant_id,
+                        order_id=order_id,
+                        shipment_id=shipment_id,
                         sku_id=line["sku_id"],
                         warehouse_id=entry["warehouse_id"],
                         delta_available=-line["qty"],
                         delta_reserved=line["qty"],
-                        reason="order_split",
+                        reason=SPLIT_RESERVATION_REASON,
                         task_id=task_id,
-                    )
-                )
-                session.add(
-                    ShipmentLine(
-                        tenant_id=tenant_id,
-                        shipment_id=shipment_id,
-                        sku_id=line["sku_id"],
-                        qty=line["qty"],
                     )
                 )
 

@@ -99,6 +99,12 @@ class InventoryLedger(Base):
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("tenant.id"), nullable=False, index=True
     )
+    order_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("sales_order.id"), nullable=True
+    )
+    shipment_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("shipment.id"), nullable=True
+    )
     sku_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("sku.id"), nullable=False)
     warehouse_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("warehouse.id"), nullable=False

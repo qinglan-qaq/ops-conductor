@@ -11,16 +11,24 @@ from opsconductor.domain.models import (
     IdempotencyKey,
     Inventory,
     InventoryLedger,
+    OrderLine,
     SalesOrder,
     Shipment,
     ShipmentLine,
 )
-from opsconductor.domain.seed import SKU_IDS, TENANT_A, TENANT_B, WAREHOUSE_EAST
+from opsconductor.domain.seed import (
+    SHOP_A,
+    SKU_IDS,
+    TENANT_A,
+    TENANT_B,
+    WAREHOUSE_EAST,
+)
 from opsconductor.domain.write_service import (
     IdempotencyConflict,
     InsufficientStock,
     InvalidState,
     NotFound,
+    ValidationError,
     cancel_shipment,
     cancel_split,
     release_inventory,
@@ -88,6 +96,40 @@ async def _count(session, model, *conditions) -> int:
     return int(await session.scalar(statement) or 0)
 
 
+async def _create_order(order_no: str, sku_code: str, qty: int) -> uuid.UUID:
+    """Create a committed tenant A order with a single line for edge-case tests."""
+
+    order_id = uuid.uuid5(uuid.NAMESPACE_DNS, f"opsconductor.order-{order_no}")
+    async with SessionLocal() as session:
+        session.add(
+            SalesOrder(
+                id=order_id,
+                tenant_id=TENANT_A,
+                shop_id=SHOP_A,
+                warehouse_id=WAREHOUSE_EAST,
+                order_no=order_no,
+                status="pending_shipment",
+                receiver_name="张三",
+                phone="13800138000",
+                province="上海市",
+                city="上海市",
+                district="浦东新区",
+                address_detail="世纪大道 100 号",
+            )
+        )
+        await session.flush()
+        session.add(
+            OrderLine(
+                tenant_id=TENANT_A,
+                order_id=order_id,
+                sku_id=SKU_IDS[sku_code],
+                qty=qty,
+            )
+        )
+        await session.commit()
+    return order_id
+
+
 @pytest.mark.asyncio
 async def test_split_order_success_writes_shipments_inventory_and_audit(seeded_db):
     task_id = uuid.uuid4()
@@ -152,6 +194,10 @@ async def test_split_order_success_writes_shipments_inventory_and_audit(seeded_d
         } == {
             (SKU_IDS["SKU-001"], -2, 2, "order_split", task_id),
             (SKU_IDS["SKU-002"], -1, 1, "order_split", task_id),
+        }
+        assert {row.order_id for row in ledger} == {ORDER_O1001}
+        assert {row.shipment_id for row in ledger} == {
+            uuid.UUID(value) for value in response["shipment_ids"]
         }
 
         audit = await session.scalar(
@@ -280,6 +326,85 @@ async def test_split_order_is_idempotent_and_rejects_changed_body(seeded_db):
 
 
 @pytest.mark.asyncio
+async def test_split_order_rejects_under_shipment_without_writes(seeded_db):
+    shipments = [
+        {
+            "warehouse_id": str(WAREHOUSE_EAST),
+            "lines": [{"sku_id": str(SKU_IDS["SKU-001"]), "qty": 2}],
+        }
+    ]
+    async with SessionLocal() as session:
+        with pytest.raises(ValidationError, match="do not match order") as error:
+            await split_order(
+                session,
+                TENANT_A,
+                ORDER_O1001,
+                shipments,
+                "split-under",
+                dry_run=False,
+                actor_id=OPERATOR_ID,
+                task_id=None,
+            )
+        assert "missing" in str(error.value)
+        assert str(SKU_IDS["SKU-002"]) in str(error.value)
+
+    async with SessionLocal() as session:
+        order = await _order(session, ORDER_O1001)
+        assert (order.status, order.version) == ("pending_shipment", 0)
+        assert await _shipments(session, ORDER_O1001) == []
+        for sku_code in ("SKU-001", "SKU-002"):
+            inventory = await _inventory(session, sku_code)
+            assert (inventory.available, inventory.reserved, inventory.version) == (
+                100,
+                0,
+                0,
+            )
+        assert await _count(session, InventoryLedger, InventoryLedger.tenant_id == TENANT_A) == 0
+        assert await _count(session, AuditLog, AuditLog.tenant_id == TENANT_A) == 0
+        assert await _count(session, IdempotencyKey, IdempotencyKey.tenant_id == TENANT_A) == 0
+
+
+@pytest.mark.asyncio
+async def test_split_order_rejects_sku_not_on_order_without_writes(seeded_db):
+    shipments = [
+        *_shipments_o1001(),
+        {
+            "warehouse_id": str(WAREHOUSE_EAST),
+            "lines": [{"sku_id": str(SKU_IDS["SKU-004"]), "qty": 1}],
+        },
+    ]
+    async with SessionLocal() as session:
+        with pytest.raises(ValidationError, match="do not match order") as error:
+            await split_order(
+                session,
+                TENANT_A,
+                ORDER_O1001,
+                shipments,
+                "split-foreign-sku",
+                dry_run=False,
+                actor_id=OPERATOR_ID,
+                task_id=None,
+            )
+        assert "unexpected" in str(error.value)
+        assert str(SKU_IDS["SKU-004"]) in str(error.value)
+
+    async with SessionLocal() as session:
+        order = await _order(session, ORDER_O1001)
+        assert (order.status, order.version) == ("pending_shipment", 0)
+        assert await _shipments(session, ORDER_O1001) == []
+        foreign_inventory = await _inventory(session, "SKU-004")
+        assert (
+            foreign_inventory.available,
+            foreign_inventory.reserved,
+            foreign_inventory.version,
+        ) == (100, 0, 0)
+        assert (await _inventory(session, "SKU-001")).available == 100
+        assert await _count(session, InventoryLedger, InventoryLedger.tenant_id == TENANT_A) == 0
+        assert await _count(session, AuditLog, AuditLog.tenant_id == TENANT_A) == 0
+        assert await _count(session, IdempotencyKey, IdempotencyKey.tenant_id == TENANT_A) == 0
+
+
+@pytest.mark.asyncio
 async def test_split_order_insufficient_stock_rejects_whole_order(seeded_db):
     shipments = [
         {
@@ -314,14 +439,15 @@ async def test_split_order_insufficient_stock_rejects_whole_order(seeded_db):
 
 @pytest.mark.asyncio
 async def test_split_order_treats_repeated_sku_demand_cumulatively(seeded_db):
+    order_id = await _create_order("O1098", "SKU-005", 120)
     shipments = [
         {
             "warehouse_id": str(WAREHOUSE_EAST),
-            "lines": [{"sku_id": str(SKU_IDS["SKU-001"]), "qty": 60}],
+            "lines": [{"sku_id": str(SKU_IDS["SKU-005"]), "qty": 60}],
         },
         {
             "warehouse_id": str(WAREHOUSE_EAST),
-            "lines": [{"sku_id": str(SKU_IDS["SKU-001"]), "qty": 60}],
+            "lines": [{"sku_id": str(SKU_IDS["SKU-005"]), "qty": 60}],
         },
     ]
     async with SessionLocal() as session:
@@ -329,7 +455,7 @@ async def test_split_order_treats_repeated_sku_demand_cumulatively(seeded_db):
             await split_order(
                 session,
                 TENANT_A,
-                ORDER_O1001,
+                order_id,
                 shipments,
                 "split-cumulative",
                 dry_run=False,
@@ -338,10 +464,10 @@ async def test_split_order_treats_repeated_sku_demand_cumulatively(seeded_db):
             )
 
     async with SessionLocal() as session:
-        order = await _order(session, ORDER_O1001)
+        order = await _order(session, order_id)
         assert order.status == "pending_shipment"
-        assert await _shipments(session, ORDER_O1001) == []
-        inventory = await _inventory(session, "SKU-001")
+        assert await _shipments(session, order_id) == []
+        inventory = await _inventory(session, "SKU-005")
         assert (inventory.available, inventory.reserved) == (100, 0)
         assert await _count(session, InventoryLedger, InventoryLedger.tenant_id == TENANT_A) == 0
 
@@ -436,6 +562,10 @@ async def test_cancel_split_compensates_and_is_idempotent(seeded_db):
         assert [row.reason for row in ledger].count("order_split") == 2
         assert [row.reason for row in ledger].count("split_compensation") == 2
         assert {row.task_id for row in ledger} == {task_id}
+        assert {row.order_id for row in ledger} == {ORDER_O1001}
+        assert {row.shipment_id for row in ledger} == {
+            shipment.id for shipment in shipments
+        }
 
         audits = list(
             (
@@ -522,7 +652,97 @@ async def test_compensation_primitives_release_each_shipment_once(seeded_db):
         assert (await _inventory(session, "SKU-001")).reserved == 0
         assert (await _inventory(session, "SKU-002")).available == 100
         assert (await _inventory(session, "SKU-002")).reserved == 0
-        assert await _count(session, InventoryLedger, InventoryLedger.tenant_id == TENANT_A) == 4
+        ledger = list(
+            (
+                await session.scalars(
+                    select(InventoryLedger).where(
+                        InventoryLedger.tenant_id == TENANT_A
+                    )
+                )
+            ).all()
+        )
+        assert len(ledger) == 4
+        assert {row.order_id for row in ledger} == {ORDER_O1001}
+        assert {row.shipment_id for row in ledger} == set(shipment_ids)
+
+
+@pytest.mark.asyncio
+async def test_cancel_split_cannot_release_another_orders_reservation(seeded_db):
+    other_order_id = await _create_order("O1099", "SKU-005", 1)
+    async with SessionLocal() as session:
+        split = await split_order(
+            session,
+            TENANT_A,
+            other_order_id,
+            [
+                {
+                    "warehouse_id": str(WAREHOUSE_EAST),
+                    "lines": [{"sku_id": str(SKU_IDS["SKU-005"]), "qty": 1}],
+                }
+            ],
+            "split-other-o1099",
+            dry_run=False,
+            actor_id=OPERATOR_ID,
+            task_id=None,
+        )
+        assert split["status"] == "split"
+
+        with pytest.raises(InvalidState, match="reservation ledger"):
+            await cancel_split(
+                session,
+                TENANT_A,
+                ORDER_O1005,
+                "cancel-seeded-o1005",
+                task_id=None,
+            )
+
+    async with SessionLocal() as session:
+        sku_005 = await _inventory(session, "SKU-005")
+        assert (sku_005.available, sku_005.reserved, sku_005.version) == (99, 1, 1)
+
+        seeded_order = await _order(session, ORDER_O1005)
+        assert seeded_order.status == "split"
+        seeded_shipments = await _shipments(session, ORDER_O1005)
+        assert len(seeded_shipments) == 1
+        assert seeded_shipments[0].status == "created"
+
+        other_order = await _order(session, other_order_id)
+        assert other_order.status == "split"
+        other_shipments = await _shipments(session, other_order_id)
+        assert len(other_shipments) == 1
+        assert other_shipments[0].status == "created"
+
+        ledger = list(
+            (
+                await session.scalars(
+                    select(InventoryLedger).where(
+                        InventoryLedger.tenant_id == TENANT_A
+                    )
+                )
+            ).all()
+        )
+        assert len(ledger) == 1
+        assert ledger[0].order_id == other_order_id
+        assert ledger[0].shipment_id == other_shipments[0].id
+        assert ledger[0].reason == "order_split"
+        assert (
+            await _count(
+                session,
+                AuditLog,
+                AuditLog.tenant_id == TENANT_A,
+                AuditLog.entity_id == str(ORDER_O1005),
+            )
+            == 0
+        )
+        assert (
+            await _count(
+                session,
+                IdempotencyKey,
+                IdempotencyKey.tenant_id == TENANT_A,
+                IdempotencyKey.scope == f"order.split.cancel:{ORDER_O1005}",
+            )
+            == 0
+        )
 
 
 @pytest.mark.asyncio
