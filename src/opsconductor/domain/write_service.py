@@ -17,6 +17,11 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from opsconductor.domain.address import (
+    ADDRESS_FIELDS,
+    address_fields_are_valid,
+    order_address,
+)
 from opsconductor.domain.models import (
     IdempotencyKey,
     Inventory,
@@ -37,7 +42,9 @@ __all__ = [
     "WriteError",
     "cancel_shipment",
     "cancel_split",
+    "change_address",
     "release_inventory",
+    "revert_address",
     "split_order",
 ]
 
@@ -88,6 +95,14 @@ def _inventory_release_scope(order_id: UUID) -> str:
     return f"inventory.release:{order_id}"
 
 
+def _change_address_scope(order_id: UUID) -> str:
+    return f"order.change_address:{order_id}"
+
+
+def _revert_address_scope(order_id: UUID) -> str:
+    return f"order.change_address.revert:{order_id}"
+
+
 def _request_hash(payload: Any) -> str:
     encoded = json.dumps(payload, sort_keys=True, default=str)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
@@ -108,6 +123,43 @@ def _as_uuid(value: Any, field: str) -> UUID:
         return UUID(str(value))
     except (AttributeError, TypeError, ValueError) as exc:
         raise ValidationError(f"{field} must be a UUID") from exc
+
+
+def _normalize_address_object(value: Any, field: str) -> dict[str, str]:
+    """Require a full six-field address object and normalize its strings."""
+
+    if not isinstance(value, dict):
+        raise ValidationError(f"{field} must be an address object")
+    missing = [name for name in ADDRESS_FIELDS if name not in value]
+    if missing:
+        raise ValidationError(f"{field} is missing fields: " + ", ".join(missing))
+    unknown = sorted(str(name) for name in value if name not in ADDRESS_FIELDS)
+    if unknown:
+        raise ValidationError(f"{field} has unknown fields: " + ", ".join(unknown))
+
+    normalized: dict[str, str] = {}
+    for name in ADDRESS_FIELDS:
+        item = value[name]
+        if not isinstance(item, str):
+            raise ValidationError(f"{field}.{name} must be a string")
+        normalized[name] = item.strip()
+    return normalized
+
+
+def _normalize_new_address(new_address: Any) -> dict[str, str]:
+    """Normalize an address change request to a full or partial address mapping.
+
+    A dict must carry all six address fields. A bare string is the planner's
+    convenience shape: it replaces ``address_detail`` while the remaining fields
+    are preserved from the current order when the change is applied.
+    """
+
+    if isinstance(new_address, str):
+        detail = new_address.strip()
+        if not detail:
+            raise ValidationError("new_address must not be empty")
+        return {"address_detail": detail}
+    return _normalize_address_object(new_address, "new_address")
 
 
 def _normalize_shipments(shipments: Any) -> list[dict[str, Any]]:
@@ -480,6 +532,196 @@ async def _lock_order_shipments(
             )
         ).all()
     )
+
+
+async def change_address(
+    session: AsyncSession,
+    tenant_id: UUID,
+    order_id: UUID,
+    new_address: dict[str, str] | str,
+    idempotency_key: str,
+    dry_run: bool = False,
+    actor_id: UUID | None = None,
+    task_id: UUID | None = None,
+) -> dict[str, Any]:
+    """Change a pending order's address before it is split or shipped.
+
+    ``new_address`` is either a full address object with all six fields or a
+    bare ``address_detail`` string, the shape produced by the planner; the
+    string form preserves the order's other address fields. The merged
+    candidate is validated before anything is written. ``dry_run`` returns the
+    projected before/after without staging rows. A successful write commits
+    before returning; the service owns the transaction boundary.
+    """
+
+    idempotency_key = _validate_idempotency_key(idempotency_key)
+    normalized = _normalize_new_address(new_address)
+    scope = _change_address_scope(order_id)
+    fingerprint = _request_hash(
+        {"order_id": str(order_id), "new_address": normalized}
+    )
+
+    replay = await _replay(session, tenant_id, scope, idempotency_key, fingerprint)
+    if replay is not None:
+        return replay
+
+    try:
+        order = await _lock_order(session, tenant_id, order_id)
+        if order is None:
+            raise NotFound(f"order {order_id} not found for this tenant")
+        if order.status != "pending_shipment":
+            replay = await _replay(
+                session, tenant_id, scope, idempotency_key, fingerprint
+            )
+            if replay is not None:
+                await session.rollback()
+                return replay
+            raise InvalidState(
+                f"order {order_id} is {order.status!r}, expected 'pending_shipment'"
+            )
+        existing_shipment = await session.scalar(
+            select(Shipment.id)
+            .where(Shipment.tenant_id == tenant_id, Shipment.order_id == order_id)
+            .limit(1)
+        )
+        if existing_shipment is not None:
+            raise InvalidState(f"order {order_id} already has shipments")
+
+        before = order_address(order)
+        after = {**before, **normalized}
+        if not address_fields_are_valid(after):
+            raise ValidationError(
+                f"invalid address for order {order_id}: receiver_name, phone, "
+                "province, city, district, and address_detail must be valid"
+            )
+
+        if dry_run:
+            result = {
+                "dry_run": True,
+                "order_id": str(order_id),
+                "order_no": order.order_no,
+                "before": before,
+                "after": after,
+            }
+            await session.rollback()
+            return result
+
+        for field in ADDRESS_FIELDS:
+            setattr(order, field, after[field])
+        order.version += 1
+        response = {
+            "order_id": str(order_id),
+            "order_no": order.order_no,
+            "status": "updated",
+            "before": before,
+            "after": after,
+            "version": order.version,
+        }
+        session.add(
+            IdempotencyKey(
+                tenant_id=tenant_id,
+                scope=scope,
+                key=idempotency_key,
+                request_hash=fingerprint,
+                response=response,
+                status="completed",
+            )
+        )
+        await write_audit(
+            session,
+            tenant_id=tenant_id,
+            task_id=task_id,
+            actor_id=actor_id,
+            action="order.change_address",
+            entity_type="sales_order",
+            entity_id=str(order_id),
+            before=before,
+            after=after,
+            evidence={"version": order.version},
+        )
+        replayed = await _commit_or_replay(
+            session, tenant_id, scope, idempotency_key, fingerprint
+        )
+        return replayed if replayed is not None else response
+    except BaseException:
+        await session.rollback()
+        raise
+
+
+async def revert_address(
+    session: AsyncSession,
+    tenant_id: UUID,
+    order_id: UUID,
+    before_address: dict[str, str],
+    idempotency_key: str,
+    task_id: UUID | None = None,
+) -> dict[str, Any]:
+    """Compensate an address change by restoring the supplied snapshot.
+
+    ``before_address`` is the full six-field ``before`` mapping returned by the
+    original ``change_address`` call. The restored address is not re-validated,
+    because the original may itself have been invalid (for example an empty
+    ``address_detail``). The write is idempotent per key and commits before
+    returning.
+    """
+
+    idempotency_key = _validate_idempotency_key(idempotency_key)
+    target = _normalize_address_object(before_address, "before_address")
+    scope = _revert_address_scope(order_id)
+    fingerprint = _request_hash(
+        {"order_id": str(order_id), "before_address": target}
+    )
+
+    replay = await _replay(session, tenant_id, scope, idempotency_key, fingerprint)
+    if replay is not None:
+        return replay
+
+    try:
+        order = await _lock_order(session, tenant_id, order_id)
+        if order is None:
+            raise NotFound(f"order {order_id} not found for this tenant")
+
+        current = order_address(order)
+        for field in ADDRESS_FIELDS:
+            setattr(order, field, target[field])
+        order.version += 1
+        response = {
+            "order_id": str(order_id),
+            "order_no": order.order_no,
+            "status": "reverted",
+            "before": current,
+            "after": target,
+            "version": order.version,
+        }
+        session.add(
+            IdempotencyKey(
+                tenant_id=tenant_id,
+                scope=scope,
+                key=idempotency_key,
+                request_hash=fingerprint,
+                response=response,
+                status="completed",
+            )
+        )
+        await write_audit(
+            session,
+            tenant_id=tenant_id,
+            task_id=task_id,
+            actor_id=None,
+            action="order.change_address.revert",
+            entity_type="sales_order",
+            entity_id=str(order_id),
+            before=current,
+            after=target,
+            evidence={"version": order.version},
+        )
+        replayed = await _commit_or_replay(
+            session, tenant_id, scope, idempotency_key, fingerprint
+        )
+        return replayed if replayed is not None else response
+    except BaseException:
+        await session.rollback()
+        raise
 
 
 async def split_order(

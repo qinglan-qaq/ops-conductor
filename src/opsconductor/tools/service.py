@@ -103,6 +103,53 @@ class ErpToolService:
             task_id=task_id,
         )
 
+    async def order_change_address(
+        self,
+        tenant_id: UUID,
+        order_id: UUID,
+        address: dict[str, str] | str,
+        idempotency_key: str,
+        dry_run: bool = False,
+        actor_id: UUID | None = None,
+        task_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        """Change a pending order's address; the write service owns the commit.
+
+        ``address`` is either a full address object with all six fields or a
+        bare ``address_detail`` string, which preserves the order's other
+        address fields.
+        """
+
+        return await write_service.change_address(
+            self.session,
+            tenant_id,
+            order_id,
+            address,
+            idempotency_key,
+            dry_run=dry_run,
+            actor_id=actor_id,
+            task_id=task_id,
+        )
+
+    async def order_revert_address(
+        self,
+        tenant_id: UUID,
+        order_id: UUID,
+        before_address: dict[str, str],
+        idempotency_key: str,
+        task_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        """Restore the address snapshot returned by a previous change."""
+
+        return await write_service.revert_address(
+            self.session,
+            tenant_id,
+            order_id,
+            before_address,
+            idempotency_key,
+            task_id=task_id,
+        )
+
     async def order_revert_split(
         self,
         tenant_id: UUID,

@@ -85,6 +85,54 @@ async def order_split(
         )
 
 
+@server.tool(name="order_change_address")
+async def order_change_address(
+    tenant_id: str,
+    order_id: str,
+    address: dict[str, Any] | str,
+    idempotency_key: str,
+    dry_run: bool = False,
+    actor_id: str | None = None,
+    task_id: str | None = None,
+) -> dict[str, Any]:
+    """Change a pending order's address before shipment.
+
+    ``address`` accepts either a full six-field address object or a bare
+    ``address_detail`` string; the string form preserves the other fields.
+    """
+
+    async with SessionLocal() as session:
+        return await ErpToolService(session).order_change_address(
+            UUID(tenant_id),
+            UUID(order_id),
+            address,
+            idempotency_key,
+            dry_run=dry_run,
+            actor_id=_optional_uuid(actor_id),
+            task_id=_optional_uuid(task_id),
+        )
+
+
+@server.tool(name="order_revert_address")
+async def order_revert_address(
+    tenant_id: str,
+    order_id: str,
+    before_address: dict[str, Any],
+    idempotency_key: str,
+    task_id: str | None = None,
+) -> dict[str, Any]:
+    """Compensation tool: restore the address snapshot returned by a change."""
+
+    async with SessionLocal() as session:
+        return await ErpToolService(session).order_revert_address(
+            UUID(tenant_id),
+            UUID(order_id),
+            before_address,
+            idempotency_key,
+            task_id=_optional_uuid(task_id),
+        )
+
+
 @server.tool(name="shipment_cancel")
 async def shipment_cancel(
     tenant_id: str,
