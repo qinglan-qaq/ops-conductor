@@ -1,12 +1,17 @@
+import asyncio
 import os
-import pathlib
-import tempfile
+import sys
+
+# psycopg async connections require a selector event loop on Windows.
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 # The test database must be configured before opsconductor.config / opsconductor.db
 # are imported, because the module-level engine binds the URL at import time.
-# Docker/PostgreSQL is unavailable in this environment, so tests use file-based SQLite.
-db_file = pathlib.Path(tempfile.gettempdir()) / "opsconductor_test.db"
-os.environ["OPSCONDUCTOR_DATABASE_URL"] = f"sqlite+aiosqlite:///{db_file.as_posix()}"
+# Tests use the Dockerized PostgreSQL instance from docker-compose.yml.
+os.environ["OPSCONDUCTOR_DATABASE_URL"] = (
+    "postgresql+psycopg://ops:ops@localhost:5432/opsconductor_test"
+)
 
 import pytest_asyncio  # noqa: E402
 from sqlalchemy.ext.asyncio import create_async_engine  # noqa: E402

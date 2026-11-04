@@ -65,7 +65,9 @@ async def seed(session: AsyncSession) -> None:
             continue
         product_id = uuid.uuid5(uuid.NAMESPACE_DNS, f"opsconductor.product-{code}")
         session.add(Product(id=product_id, tenant_id=TENANT_A, name=f"Product {code}"))
+        await session.flush()
         session.add(Sku(id=sku_id, tenant_id=TENANT_A, product_id=product_id, code=code))
+        await session.flush()
         available = 0 if code == "SKU-003" else 100
         session.add(
             Inventory(
@@ -113,6 +115,7 @@ async def seed(session: AsyncSession) -> None:
                 created_at=datetime(2026, 11, 1, tzinfo=UTC),
             )
         )
+        await session.flush()
         for sku_code, qty in lines:
             session.add(
                 OrderLine(
@@ -143,6 +146,7 @@ async def seed(session: AsyncSession) -> None:
                 warehouse_id=WAREHOUSE_EAST,
             )
         )
+        await session.flush()
         session.add(
             ShipmentLine(
                 id=uuid.uuid5(uuid.NAMESPACE_DNS, "opsconductor.shipment-line-O1005"),

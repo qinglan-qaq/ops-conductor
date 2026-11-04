@@ -1,21 +1,14 @@
 """Read-only ERP tool service backed by tenant-scoped repositories."""
 
-import re
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opsconductor.domain import repositories
-from opsconductor.domain.models import SalesOrder
+from opsconductor.domain.address import address_is_valid
 
-
-def address_is_valid(order: SalesOrder) -> bool:
-    if not all([order.receiver_name, order.phone, order.province, order.city, order.district]):
-        return False
-    if not re.fullmatch(r"1[3-9]\d{9}", order.phone):
-        return False
-    return bool(order.address_detail.strip())
+__all__ = ["ErpToolService", "address_is_valid"]
 
 
 class ErpToolService:
