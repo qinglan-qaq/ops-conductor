@@ -1,15 +1,18 @@
-"""Server-rendered approval console for tasks, plans, approvals, and traces.
+"""任务、计划、审批与 trace 的服务端渲染控制台。
 
-Authentication shortcut (local demo only)
------------------------------------------
-Browsers cannot attach custom headers to form submissions, so the console
-routes accept the API key as an ``api_key`` query parameter in addition to the
-optional ``X-API-Key`` header. Omitting the key is allowed only when
-``app_env == "development"`` and then falls back to the seeded
-``dev-operator-a`` operator. Any other environment rejects keyless requests
-with 401. This is a local-demo convenience; production SSO and secure console
-authentication are out of scope. Every console query remains tenant-scoped
-through the resolved ``Identity``.
+认证快捷方式（仅限本地演示）
+----------------------------
+浏览器无法为表单提交附加自定义请求头，因此控制台路由除了可选的 ``X-API-Key``
+请求头外，还接受 ``api_key`` 查询参数。仅当 ``app_env == "development"`` 时允许
+省略 key，此时回退到预置的 ``dev-operator-a`` 操作者；其他环境一律以 401 拒绝
+无 key 请求。这是本地演示便利，生产 SSO 与安全控制台认证不在范围内。所有控制台
+查询仍然通过解析出的 ``Identity`` 限定租户。
+
+Invariants:
+
+- 每个任务、审批与 trace 查询都按解析出的租户限定。
+- 控制台只渲染只读视图并转发审批决策；它不装配执行器，也不触发任务执行。
+- 重定向会保留 ``api_key`` 查询参数，以免浏览器在表单提交后丢失凭据。
 """
 
 from pathlib import Path
@@ -44,9 +47,24 @@ async def get_console_identity(
     api_key: Annotated[str | None, Query()] = None,
     x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
 ) -> Identity:
-    """Resolve the console caller from the query parameter or header.
+    """从查询参数或请求头解析控制台调用方。
 
-    See the module docstring for the development-only keyless fallback.
+    参见模块文档中的仅开发环境无 key 回退。
+
+    Args:
+        session: 用于按 key 哈希查找用户的会话。
+        api_key: ``api_key`` 查询参数；浏览器表单提交使用。
+        x_api_key: 可选的 ``X-API-Key`` 请求头。
+
+    Returns:
+        与该 key 关联的不可变 :class:`Identity`。
+
+    Raises:
+        HTTPException: 非开发环境且未提供 key、或 key 未知时返回 401。
+
+    Note:
+        查询参数优先于请求头；两者都会去除首尾空白。生产环境不存在无 key 的
+        快捷路径。
     """
 
     candidate = (api_key or x_api_key or "").strip()
@@ -63,7 +81,14 @@ async def get_console_identity(
 
 
 def _auth_query(request: Request) -> str:
-    """Return the query suffix that keeps the browser key across redirects."""
+    """返回在重定向中保留浏览器 key 的查询后缀。
+
+    Args:
+        request: 当前请求。
+
+    Returns:
+        含 URL 编码 ``api_key`` 的查询串；没有该参数时返回空字符串。
+    """
 
     api_key = request.query_params.get("api_key")
     if not api_key:
@@ -74,6 +99,23 @@ def _auth_query(request: Request) -> str:
 async def _load_task(
     session: AsyncSession, identity: Identity, task_id: UUID
 ) -> TaskRun:
+    """加载租户拥有的任务；跨租户访问写审计并拒绝。
+
+    Args:
+        session: 请求会话。
+        identity: 解析出的控制台调用方。
+        task_id: 目标任务。
+
+    Returns:
+        属于调用方租户的任务。
+
+    Raises:
+        HTTPException: 任务不存在时 404；任务属于其他租户时 403。
+
+    Note:
+        拒绝审计由 ``write_access_denied`` 提交，因此会话可能已被提交。
+    """
+
     task = await session.get(TaskRun, task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="task not found")
@@ -96,6 +138,15 @@ async def _load_task(
 
 
 def _plan_order_ids(plan: dict | None) -> set[UUID]:
+    """收集计划节点引用的订单 ID，忽略缺失或非法的值。
+
+    Args:
+        plan: 计划载荷；``None`` 或缺少 ``nodes`` 时视为空计划。
+
+    Returns:
+        去重后的订单 UUID 集合。
+    """
+
     order_ids: set[UUID] = set()
     for node in (plan or {}).get("nodes", []):
         try:
@@ -108,6 +159,17 @@ def _plan_order_ids(plan: dict | None) -> set[UUID]:
 async def _order_numbers(
     session: AsyncSession, tenant_id: UUID, order_ids: set[UUID]
 ) -> dict[UUID, str]:
+    """批量查询订单号，用于控制台展示。
+
+    Args:
+        session: 请求会话。
+        tenant_id: 查询范围；不会返回其他租户的订单。
+        order_ids: 待查询的订单 ID。
+
+    Returns:
+        订单 ID 到 ``order_no`` 的映射；不存在的 ID 不会出现在结果中。
+    """
+
     if not order_ids:
         return {}
     orders = (
@@ -122,6 +184,17 @@ async def _order_numbers(
 
 
 def _plan_nodes(plan: dict | None, order_numbers: dict[UUID, str]) -> list[dict]:
+    """复制计划节点并为每个节点补充 ``order_no``。
+
+    Args:
+        plan: 计划载荷；``None`` 或缺少 ``nodes`` 时返回空列表。
+        order_numbers: 订单 ID 到订单号的映射。
+
+    Returns:
+        新的节点字典列表；原始计划不会被修改，无法解析的 ``order_id`` 对应
+        ``order_no`` 为 ``None``。
+    """
+
     nodes: list[dict] = []
     for raw in (plan or {}).get("nodes", []):
         node = dict(raw)
@@ -142,6 +215,21 @@ async def _approval_rows(
     task: TaskRun,
     order_numbers: dict[UUID, str],
 ) -> list[dict]:
+    """加载任务的审批行及展示所需的订单号与审批人名称。
+
+    Args:
+        session: 请求会话。
+        task: 已按租户校验的任务。
+        order_numbers: 订单 ID 到订单号的映射。
+
+    Returns:
+        每项包含 ``approval``、``order_no`` 与 ``approver`` 的列表，按审批 ID
+        排序；没有审批人时 ``approver`` 为 ``None``。
+
+    Note:
+        审批查询再次按任务的 ``tenant_id`` 限定，审批人查询也限定同一租户。
+    """
+
     approvals = (
         await session.scalars(
             select(Approval)
@@ -187,6 +275,20 @@ async def _approval_rows(
 
 
 async def _trace_spans(session: AsyncSession, task: TaskRun) -> list[TraceSpan]:
+    """加载任务的全部 trace span。
+
+    Args:
+        session: 请求会话。
+        task: 已按租户校验的任务。
+
+    Returns:
+        按开始时间与 ID 排序的 span 列表；查询限定任务的租户。
+
+    Note:
+        trace 只包含已提交的 span；控制台本身不触发任务执行，审批决策产生的
+        span 由审批服务记录。
+    """
+
     return list(
         (
             await session.scalars(
@@ -207,7 +309,19 @@ async def list_tasks(
     identity: Annotated[Identity, Depends(get_console_identity)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> HTMLResponse:
-    """Render the tenant's task list with plan summaries and order numbers."""
+    """渲染租户的任务列表，附带计划摘要与订单号。
+
+    Args:
+        request: 当前请求，用于模板与保留 key。
+        identity: 解析出的控制台调用方。
+        session: 请求会话。
+
+    Returns:
+        任务列表 HTML 响应。
+
+    Note:
+        只查询调用方租户的任务；不会启动执行器。
+    """
 
     tasks = (
         await session.scalars(
@@ -252,7 +366,23 @@ async def task_detail(
     identity: Annotated[Identity, Depends(get_console_identity)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> HTMLResponse:
-    """Render one task's plan nodes, approvals, and trace timeline."""
+    """渲染一个任务的计划节点、审批与 trace 时间线。
+
+    Args:
+        task_id: 目标任务。
+        request: 当前请求，用于模板与保留 key。
+        identity: 解析出的控制台调用方。
+        session: 请求会话。
+
+    Returns:
+        任务详情 HTML 响应。
+
+    Raises:
+        HTTPException: 任务不存在时 404，跨租户时 403。
+
+    Note:
+        任务、审批与 trace 都按解析出的租户限定；控制台不装配执行器。
+    """
 
     task = await _load_task(session, identity, task_id)
     plan = task.plan or {}
@@ -290,7 +420,24 @@ async def task_trace(
     identity: Annotated[Identity, Depends(get_console_identity)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> HTMLResponse:
-    """Render every trace span recorded for one tenant-scoped task."""
+    """渲染一个租户限定任务的全部 trace span。
+
+    Args:
+        task_id: 目标任务。
+        request: 当前请求，用于模板与保留 key。
+        identity: 解析出的控制台调用方。
+        session: 请求会话。
+
+    Returns:
+        trace 时间线 HTML 响应。
+
+    Raises:
+        HTTPException: 任务不存在时 404，跨租户时 403。
+
+    Note:
+        只渲染已提交的 span；控制台本身不执行任务，审批决策产生的 trace 由
+        审批服务记录。
+    """
 
     task = await _load_task(session, identity, task_id)
     return templates.TemplateResponse(
@@ -305,6 +452,18 @@ async def task_trace(
 
 
 def _parse_order_id(raw: str | None) -> UUID | None:
+    """解析表单中的可选订单 ID。
+
+    Args:
+        raw: 原始表单值；``None`` 或空白表示未限定订单。
+
+    Returns:
+        解析后的 UUID；未提供时返回 ``None``。
+
+    Raises:
+        HTTPException: 值不是合法 UUID 时返回 422。
+    """
+
     if raw is None or not raw.strip():
         return None
     try:
@@ -322,6 +481,28 @@ async def _decide(
     comment: str | None,
     order_id: UUID | None,
 ) -> RedirectResponse:
+    """转发控制台审批决策并重定向回任务详情页。
+
+    Args:
+        request: 当前请求，用于保留 key 与构造重定向。
+        task_id: 目标任务。
+        identity: 解析出的控制台调用方。
+        session: 请求会话。
+        approved: ``True`` 表示批准，``False`` 表示拒绝。
+        comment: 可选备注；空白会被视为 ``None``。
+        order_id: 只裁决单个订单的审批。
+
+    Returns:
+        指向任务详情页的 303 重定向，并保留 ``api_key`` 查询参数。
+
+    Raises:
+        HTTPException: 审批服务抛出 :class:`ApprovalError` 时按其
+            ``status_code`` 返回。
+
+    Note:
+        角色门禁与租户限定由审批服务执行；路由本身不写审批行，也不触发执行。
+    """
+
     service = ApprovalService(session)
     try:
         await service.decide(
@@ -348,7 +529,25 @@ async def approve_task(
     comment: Annotated[str | None, Form()] = None,
     order_id: Annotated[str | None, Form()] = None,
 ) -> RedirectResponse:
-    """Approve all pending approvals, or only one order's, then redirect back."""
+    """批准全部待处理审批或某个订单的审批，然后重定向回去。
+
+    Args:
+        task_id: 目标任务。
+        request: 当前请求，用于保留 key 与构造重定向。
+        identity: 解析出的控制台调用方。
+        session: 请求会话。
+        comment: 可选的表单备注。
+        order_id: 可选的目标订单表单值。
+
+    Returns:
+        指向任务详情页的 303 重定向。
+
+    Raises:
+        HTTPException: 订单 ID 非法时 422；审批服务拒绝时按其状态码返回。
+
+    Note:
+        角色门禁与租户限定由审批服务执行；控制台不触发执行。
+    """
 
     return await _decide(
         request, task_id, identity, session, True, comment, _parse_order_id(order_id)
@@ -364,7 +563,25 @@ async def reject_task(
     comment: Annotated[str | None, Form()] = None,
     order_id: Annotated[str | None, Form()] = None,
 ) -> RedirectResponse:
-    """Reject all pending approvals, or only one order's, then redirect back."""
+    """拒绝全部待处理审批或某个订单的审批，然后重定向回去。
+
+    Args:
+        task_id: 目标任务。
+        request: 当前请求，用于保留 key 与构造重定向。
+        identity: 解析出的控制台调用方。
+        session: 请求会话。
+        comment: 可选的表单备注。
+        order_id: 可选的目标订单表单值。
+
+    Returns:
+        指向任务详情页的 303 重定向。
+
+    Raises:
+        HTTPException: 订单 ID 非法时 422；审批服务拒绝时按其状态码返回。
+
+    Note:
+        角色门禁与租户限定由审批服务执行；控制台不触发执行。
+    """
 
     return await _decide(
         request, task_id, identity, session, False, comment, _parse_order_id(order_id)
