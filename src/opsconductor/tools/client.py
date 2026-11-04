@@ -9,6 +9,8 @@ from typing import Any
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
+from opsconductor.tools import faults
+
 
 class ErpToolClient:
     """Start the ERP MCP server as a subprocess and call its read tools."""
@@ -37,6 +39,7 @@ class ErpToolClient:
 
     async def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         assert self._session is not None
+        faults.check(name)
         result = await self._session.call_tool(name, arguments)
         if result.is_error:
             raise RuntimeError(f"MCP tool {name} failed")
