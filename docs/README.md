@@ -39,3 +39,4 @@
 - 2026-11-04：MVP 需求收敛为订单异常 + 拆单/改址的 3 周可写闭环，新增 [MVP 设计规格](specs/2026-11-04-mvp-order-exception-design.md)。
 - 2026-11-04：新增 [JD 对齐设计方案](specs/2026-11-04-jd-alignment-design.md)，在 MVP 后补 ERP Adapter、SKILL、Memory、RAG、RPA 和多模型，总周期约 6 周。
 - 2026-11-04：新增 [项目代码审查](reviews/2026-11-04-project-code-review.md)，记录两轴审查、结构热点与 P0/P1/P2 建议。
+- 2026-11-04：核心源码补充中文 Google 风格文档字符串，并在[交付状态](delivery-status.md)记录覆盖范围与验证结果。
