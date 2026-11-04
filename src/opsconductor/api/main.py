@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 
 from opsconductor import __version__
+from opsconductor.api.routes.tasks import router as tasks_router
 from opsconductor.config import get_settings
 
 app = FastAPI(
@@ -10,6 +11,8 @@ app = FastAPI(
     description="电商 ERP 多 Agent 运营系统",
     version=__version__,
 )
+
+app.include_router(tasks_router)
 
 
 @app.get("/health", tags=["system"])
