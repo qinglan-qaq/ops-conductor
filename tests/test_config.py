@@ -2,6 +2,8 @@ from opsconductor.config import Settings
 
 
 def test_settings_defaults_and_env_override(monkeypatch):
+    # tests/conftest.py sets the SQLite test URL globally; this test asserts defaults.
+    monkeypatch.delenv("OPSCONDUCTOR_DATABASE_URL", raising=False)
     monkeypatch.setenv("OPSCONDUCTOR_L3_BATCH_THRESHOLD", "2")
     settings = Settings(_env_file=None)
     assert settings.l3_batch_threshold == 2
