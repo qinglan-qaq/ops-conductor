@@ -1,3 +1,4 @@
+import json
 import uuid
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -48,10 +49,34 @@ def _valid_stub_plan(task) -> dict:
                 "node_id": "split-o1001",
                 "order_id": str(_order_id("O1001")),
                 "action": "split_order",
-                "params": {"shipments": []},
+                "params": {
+                    "shipments": [
+                        {
+                            "warehouse_id": str(WAREHOUSE_EAST),
+                            "lines": [
+                                {"sku_id": str(SKU_IDS["SKU-001"]), "qty": 2},
+                                {"sku_id": str(SKU_IDS["SKU-002"]), "qty": 1},
+                            ],
+                        }
+                    ]
+                },
             }
         ],
     }
+
+
+class _DecodeFailureModel:
+    """Model double whose first response is invalid JSON bytes."""
+
+    def __init__(self, valid_response: dict):
+        self.valid_response = valid_response
+        self.calls = 0
+
+    async def complete_json(self, *, system: str, user: str) -> dict:
+        self.calls += 1
+        if self.calls == 1:
+            raise json.JSONDecodeError("Expecting value", "", 0)
+        return self.valid_response
 
 
 @pytest.mark.asyncio
@@ -182,6 +207,12 @@ async def test_llm_planner_accepts_valid_stub_response(seeded_db):
     assert plan.summary == "stub plan"
     assert len(plan.nodes) == 1
     assert plan.nodes[0].order_id == _order_id("O1001")
+    shipment = plan.nodes[0].params["shipments"][0]
+    assert shipment["warehouse_id"] == str(WAREHOUSE_EAST)
+    assert {(line["sku_id"], line["qty"]) for line in shipment["lines"]} == {
+        (str(SKU_IDS["SKU-001"]), 2),
+        (str(SKU_IDS["SKU-002"]), 1),
+    }
     assert model.responses == []
 
 
@@ -242,3 +273,70 @@ async def test_llm_planner_raises_when_repair_also_invalid(seeded_db):
             await LLMPlanner(model, session).plan(task)
 
     assert model.responses == []
+
+
+@pytest.mark.asyncio
+async def test_llm_planner_rejects_unknown_order_after_repair(seeded_db):
+    task = _task()
+    spoofed = _valid_stub_plan(task)
+    spoofed["nodes"][0]["order_id"] = str(uuid4())
+    repeated = _valid_stub_plan(task)
+    repeated["nodes"][0]["order_id"] = spoofed["nodes"][0]["order_id"]
+    model = StubChatModel([spoofed, repeated])
+
+    async with SessionLocal() as session:
+        with pytest.raises(PlanGenerationError, match="unknown order"):
+            await LLMPlanner(model, session).plan(task)
+
+    assert model.responses == []
+
+
+@pytest.mark.asyncio
+async def test_llm_planner_repairs_empty_shipments(seeded_db):
+    task = _task()
+    empty = _valid_stub_plan(task)
+    empty["nodes"][0]["params"] = {"shipments": []}
+    model = StubChatModel([empty, _valid_stub_plan(task)])
+
+    async with SessionLocal() as session:
+        plan = await LLMPlanner(model, session).plan(task)
+
+    assert [node.node_id for node in plan.nodes] == ["split-o1001"]
+    assert plan.nodes[0].params["shipments"][0]["lines"][0]["qty"] == 2
+    assert model.responses == []
+
+
+@pytest.mark.asyncio
+async def test_llm_planner_repairs_empty_address(seeded_db):
+    task = _task()
+    invalid = {
+        "summary": "bad address",
+        "nodes": [
+            {
+                "node_id": "change-address-o1002",
+                "order_id": str(_order_id("O1002")),
+                "action": "change_address",
+                "params": {"address": "   "},
+            }
+        ],
+    }
+    model = StubChatModel([invalid, _valid_stub_plan(task)])
+
+    async with SessionLocal() as session:
+        plan = await LLMPlanner(model, session).plan(task)
+
+    assert plan.summary == "stub plan"
+    assert [node.node_id for node in plan.nodes] == ["split-o1001"]
+    assert model.responses == []
+
+
+@pytest.mark.asyncio
+async def test_llm_planner_repairs_json_decode_failure(seeded_db):
+    task = _task()
+    model = _DecodeFailureModel(_valid_stub_plan(task))
+
+    async with SessionLocal() as session:
+        plan = await LLMPlanner(model, session).plan(task)
+
+    assert model.calls == 2
+    assert [node.node_id for node in plan.nodes] == ["split-o1001"]

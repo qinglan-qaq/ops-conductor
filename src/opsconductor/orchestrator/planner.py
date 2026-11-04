@@ -209,10 +209,13 @@ def _user_prompt(task: Any) -> str:
 
 
 def _repair_prompt(task: Any, previous: Any, error: Exception) -> str:
-    try:
-        previous_text = json.dumps(previous, ensure_ascii=False, default=str)
-    except (TypeError, ValueError):
-        previous_text = repr(previous)
+    if previous is None:
+        previous_text = "(no parsable JSON output)"
+    else:
+        try:
+            previous_text = json.dumps(previous, ensure_ascii=False, default=str)
+        except (TypeError, ValueError):
+            previous_text = repr(previous)
     if len(previous_text) > 4000:
         previous_text = f"{previous_text[:4000]}...(truncated)"
     return (
@@ -223,13 +226,77 @@ def _repair_prompt(task: Any, previous: Any, error: Exception) -> str:
     )
 
 
-def _parse_plan(raw: Any, task_id: str) -> Plan:
+def _validate_plan_against_contexts(plan: Plan, contexts: list[_OrderContext]) -> None:
+    """Reject plans that reference orders or params outside the loaded context."""
+
+    contexts_by_order = {context.order.id: context for context in contexts}
+    for node in plan.nodes:
+        if node.order_id is not None and node.order_id not in contexts_by_order:
+            raise ValueError(f"plan references unknown order: {node.order_id}")
+        if node.action == "split_order":
+            _validate_split_node(node, contexts_by_order)
+        elif node.action == "change_address":
+            address = node.params.get("address")
+            if not isinstance(address, str) or not address.strip():
+                raise ValueError(
+                    f"change_address node {node.node_id} requires a non-empty address"
+                )
+
+
+def _validate_split_node(
+    node: PlanNode, contexts_by_order: dict[UUID, _OrderContext]
+) -> None:
+    if node.order_id is None:
+        raise ValueError(f"split_order node {node.node_id} requires an order_id")
+    context = contexts_by_order[node.order_id]
+    order = context.order
+    if order.warehouse_id is None:
+        raise ValueError(
+            f"split_order node {node.node_id} references an order without a warehouse"
+        )
+    shipments = node.params.get("shipments")
+    if not isinstance(shipments, list) or not shipments:
+        raise ValueError(
+            f"split_order node {node.node_id} requires a non-empty shipments list"
+        )
+    order_skus = {str(line.sku_id) for line in context.lines}
+    for shipment in shipments:
+        if not isinstance(shipment, dict):
+            raise ValueError(f"split_order node {node.node_id} has an invalid shipment")
+        if str(shipment.get("warehouse_id")) != str(order.warehouse_id):
+            raise ValueError(
+                f"split_order node {node.node_id} shipment warehouse does not match "
+                f"order {order.order_no}"
+            )
+        lines = shipment.get("lines")
+        if not isinstance(lines, list) or not lines:
+            raise ValueError(
+                f"split_order node {node.node_id} requires non-empty shipment lines"
+            )
+        for line in lines:
+            if not isinstance(line, dict):
+                raise ValueError(f"split_order node {node.node_id} has an invalid line")
+            sku_id = line.get("sku_id")
+            qty = line.get("qty")
+            if not isinstance(sku_id, str) or sku_id not in order_skus:
+                raise ValueError(
+                    f"split_order node {node.node_id} references SKU {sku_id!r} "
+                    f"outside order {order.order_no}"
+                )
+            if isinstance(qty, bool) or not isinstance(qty, int) or qty <= 0:
+                raise ValueError(
+                    f"split_order node {node.node_id} requires positive line quantities"
+                )
+
+
+def _parse_plan(raw: Any, task_id: str, contexts: list[_OrderContext]) -> Plan:
     if not isinstance(raw, dict):
         raise ValueError("model output must be a JSON object")
     payload = dict(raw)
     payload["task_id"] = task_id
     plan = Plan.model_validate(payload)
     validate_plan(plan)
+    _validate_plan_against_contexts(plan, contexts)
     return plan
 
 
@@ -257,16 +324,17 @@ class LLMPlanner:
     async def plan(self, task: Any) -> Plan:
         contexts = await _load_order_contexts(self.session, task)
         system = _system_prompt(contexts)
-        raw = await self.model.complete_json(system=system, user=_user_prompt(task))
+        raw: Any = None
         try:
-            return _parse_plan(raw, str(task.id))
+            raw = await self.model.complete_json(system=system, user=_user_prompt(task))
+            return _parse_plan(raw, str(task.id), contexts)
         except ValueError as first_error:
-            repaired = await self.model.complete_json(
-                system=system,
-                user=_repair_prompt(task, raw, first_error),
-            )
             try:
-                return _parse_plan(repaired, str(task.id))
+                repaired = await self.model.complete_json(
+                    system=system,
+                    user=_repair_prompt(task, raw, first_error),
+                )
+                return _parse_plan(repaired, str(task.id), contexts)
             except ValueError as second_error:
                 raise PlanGenerationError(
                     "LLM planner produced an invalid plan after one repair attempt: "
