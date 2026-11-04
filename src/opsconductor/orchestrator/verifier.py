@@ -53,6 +53,11 @@ class Verifier:
     or approval are intentionally absent, and the executor owns the final task
     status. A failed check returns a readable reason so compensation is
     explainable.
+
+    Shipment coverage is compared as per-SKU quantity totals, the same invariant
+    the write service enforces: an order line of qty 3 is satisfied by shipment
+    lines of qty 2 and 1, regardless of how those quantities are grouped into
+    individual shipment-line rows.
     """
 
     def __init__(self, session: AsyncSession):

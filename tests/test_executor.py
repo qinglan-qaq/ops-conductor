@@ -13,13 +13,20 @@ from opsconductor.domain.models import (
     Approval,
     AuditLog,
     Inventory,
+    OrderLine,
     SalesOrder,
     Shipment,
     ShipmentLine,
     TaskRun,
     TaskStep,
 )
-from opsconductor.domain.seed import SKU_IDS, TENANT_A, WAREHOUSE_EAST
+from opsconductor.domain.seed import (
+    SHOP_A,
+    SKU_IDS,
+    TENANT_A,
+    TENANT_B,
+    WAREHOUSE_EAST,
+)
 from opsconductor.domain.write_service import split_order
 from opsconductor.orchestrator.executor import ExecutionResult, TaskExecutor
 from opsconductor.orchestrator.verifier import VerificationResult, Verifier
@@ -43,14 +50,24 @@ COMPENSATION_TOOLS = {"order_revert_split", "order_revert_address"}
 class FakeToolClient:
     """In-process MCP substitute that records calls and executes real writes."""
 
-    def __init__(self, fail_on: set[str] | None = None) -> None:
+    def __init__(
+        self,
+        fail_on: set[str] | None = None,
+        fail_dry_run_keys: set[str] | None = None,
+    ) -> None:
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.fail_on = set(fail_on or ())
+        self.fail_dry_run_keys = set(fail_dry_run_keys or ())
 
     async def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         self.calls.append((name, dict(arguments)))
         if name in self.fail_on:
             raise RuntimeError(f"injected tool failure: {name}")
+        if (
+            arguments.get("dry_run") is True
+            and arguments.get("idempotency_key") in self.fail_dry_run_keys
+        ):
+            raise RuntimeError(f"injected dry-run failure: {name}")
 
         async with SessionLocal() as session:
             service = ErpToolService(session)
@@ -226,12 +243,15 @@ def _shipments_o1001() -> list[dict[str, Any]]:
     ]
 
 
-async def _run(task_id: UUID, fake: FakeToolClient, verifier: Any = None) -> ExecutionResult:
+async def _run(
+    task_id: UUID,
+    fake: FakeToolClient,
+    verifier: Any = None,
+    tenant_id: UUID = TENANT_A,
+) -> ExecutionResult:
     async with SessionLocal() as session:
-        executor = (
-            TaskExecutor(session, fake, verifier=verifier)
-            if verifier is not None
-            else TaskExecutor(session, fake)
+        executor = TaskExecutor(
+            session, fake, tenant_id, verifier=verifier
         )
         return await executor.start(task_id)
 
@@ -305,6 +325,56 @@ async def test_pending_approvals_return_awaiting_and_write_nothing(seeded_db):
     assert await _steps(task_id) == []
     assert (await _task(task_id)).status == "awaiting_approval"
     assert await _order("O1001") is not None
+    assert (await _order("O1001")).status == "pending_shipment"
+
+
+@pytest.mark.asyncio
+async def test_dry_run_failure_aborts_before_any_write(seeded_db):
+    task_id = await _approved_task("exec-dry-run-failure")
+    plan = (await _task(task_id)).plan
+    split_node = next(
+        node for node in plan["nodes"] if node["action"] == "split_order"
+    )
+    fake = FakeToolClient(
+        fail_dry_run_keys={f"{task_id}:{split_node['node_id']}"}
+    )
+
+    result = await _run(task_id, fake)
+
+    assert result.status == "failed"
+    assert split_node["node_id"] in result.failed
+    assert [
+        (name, args)
+        for name, args in fake.calls
+        if args.get("dry_run") is False
+    ] == []
+
+    assert (await _task(task_id)).status == "failed"
+    assert (await _order("O1001")).status == "pending_shipment"
+    assert (await _order("O1002")).address_detail == ""
+    assert (await _inventory("SKU-001")).available == 100
+
+    statuses = {step.node_id: step.status for step in await _steps(task_id)}
+    assert set(statuses) == {node["node_id"] for node in plan["nodes"]}
+    assert statuses[split_node["node_id"]] == "failed"
+    for node in plan["nodes"]:
+        if node["action"] in {"split_order", "change_address"}:
+            if node["node_id"] != split_node["node_id"]:
+                assert statuses[node["node_id"]] == "skipped"
+
+
+@pytest.mark.asyncio
+async def test_tenant_b_executor_cannot_start_tenant_a_task(seeded_db):
+    task_id = await _approved_task("exec-tenant-isolation")
+    fake = FakeToolClient()
+
+    result = await _run(task_id, fake, tenant_id=TENANT_B)
+
+    assert result.status == "failed"
+    assert "not found" in result.reason
+    assert fake.calls == []
+    assert await _steps(task_id) == []
+    assert (await _task(task_id)).status == "running"
     assert (await _order("O1001")).status == "pending_shipment"
 
 
@@ -498,11 +568,55 @@ async def test_resume_reenters_execution_after_approval(seeded_db):
 
     fake = FakeToolClient()
     async with SessionLocal() as session:
-        result = await TaskExecutor(session, fake).resume(task_id, approved=True)
+        executor = TaskExecutor(session, fake, TENANT_A)
+        result = await executor.resume(task_id, approved=True)
 
     assert result.status == "succeeded"
     assert (await _task(task_id)).status == "succeeded"
     assert (await _order("O1001")).status == "split"
+
+
+@pytest.mark.asyncio
+async def test_resume_does_not_execute_write_without_approval_row(seeded_db):
+    task_id = uuid4()
+    node_id = "orphan-split"
+    plan = {
+        "nodes": [
+            {
+                "node_id": node_id,
+                "order_id": str(ORDER_O1001),
+                "action": "split_order",
+                "requires_approval": True,
+                "params": {"shipments": _shipments_o1001()},
+            }
+        ]
+    }
+    async with SessionLocal() as session:
+        session.add(
+            TaskRun(
+                id=task_id,
+                tenant_id=TENANT_A,
+                user_id=OPERATOR_A,
+                task_type="order_exception",
+                instruction="no approval row fixture",
+                status="running",
+                plan=plan,
+            )
+        )
+        await session.commit()
+
+    fake = FakeToolClient()
+    async with SessionLocal() as session:
+        executor = TaskExecutor(session, fake, TENANT_A)
+        result = await executor.resume(task_id, approved=True)
+
+    assert result.status == "partially_succeeded"
+    assert node_id in result.skipped
+    assert fake.calls == []
+    assert (await _order("O1001")).status == "pending_shipment"
+    assert (await _task(task_id)).status == "partially_succeeded"
+    statuses = {step.node_id: step.status for step in await _steps(task_id)}
+    assert statuses == {node_id: "skipped"}
 
 
 async def _split_for_verifier(
@@ -586,6 +700,108 @@ async def test_verifier_rejects_shipment_line_mismatch(seeded_db, mutation):
     result = await _verify(task_id, plan, results)
     assert result.passed is False
     assert "shipment" in result.reason
+
+
+@pytest.mark.asyncio
+async def test_verifier_accepts_per_sku_totals_across_shipment_lines(seeded_db):
+    order_id = uuid5(NAMESPACE_DNS, "opsconductor.order-O1100")
+    task_id = uuid4()
+    shipments = [
+        {
+            "warehouse_id": str(WAREHOUSE_EAST),
+            "lines": [{"sku_id": str(SKU_IDS["SKU-005"]), "qty": 2}],
+        },
+        {
+            "warehouse_id": str(WAREHOUSE_EAST),
+            "lines": [{"sku_id": str(SKU_IDS["SKU-005"]), "qty": 1}],
+        },
+    ]
+    async with SessionLocal() as session:
+        session.add(
+            TaskRun(
+                id=task_id,
+                tenant_id=TENANT_A,
+                user_id=OPERATOR_A,
+                task_type="order_exception",
+                instruction="per-SKU totals fixture",
+                status="running",
+            )
+        )
+        session.add(
+            SalesOrder(
+                id=order_id,
+                tenant_id=TENANT_A,
+                shop_id=SHOP_A,
+                warehouse_id=WAREHOUSE_EAST,
+                order_no="O1100",
+                status="pending_shipment",
+                receiver_name="张三",
+                phone="13800138000",
+                province="上海市",
+                city="上海市",
+                district="浦东新区",
+                address_detail="世纪大道 100 号",
+            )
+        )
+        await session.flush()
+        session.add(
+            OrderLine(
+                tenant_id=TENANT_A,
+                order_id=order_id,
+                sku_id=SKU_IDS["SKU-005"],
+                qty=3,
+            )
+        )
+        await session.commit()
+        response = await split_order(
+            session,
+            TENANT_A,
+            order_id,
+            shipments,
+            "verifier-sku-totals",
+            actor_id=OPERATOR_A,
+            task_id=task_id,
+        )
+
+    plan = {
+        "nodes": [
+            {
+                "node_id": "split-node",
+                "order_id": str(order_id),
+                "action": "split_order",
+                "params": {"shipments": shipments},
+            }
+        ]
+    }
+    result = await _verify(task_id, plan, {"split-node": response})
+    assert result.passed is True
+
+    async with SessionLocal() as session:
+        order_shipments = list(
+            (
+                await session.scalars(
+                    select(Shipment).where(
+                        Shipment.tenant_id == TENANT_A,
+                        Shipment.order_id == order_id,
+                    )
+                )
+            ).all()
+        )
+        assert len(order_shipments) == 2
+        lines = list(
+            (
+                await session.scalars(
+                    select(ShipmentLine).where(
+                        ShipmentLine.tenant_id == TENANT_A,
+                        ShipmentLine.shipment_id.in_(
+                            [shipment.id for shipment in order_shipments]
+                        ),
+                    )
+                )
+            ).all()
+        )
+        assert sorted(line.qty for line in lines) == [1, 2]
+        assert {line.sku_id for line in lines} == {SKU_IDS["SKU-005"]}
 
 
 @pytest.mark.asyncio

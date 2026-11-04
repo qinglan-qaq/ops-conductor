@@ -64,51 +64,47 @@ def _utcnow() -> datetime:
 
 
 class TaskExecutor:
-    """Run approved plan nodes through the LangGraph execution state machine."""
+    """Run approved plan nodes through the LangGraph execution state machine.
+
+    The executor is bound to one tenant at construction; every task, approval,
+    and task-step lookup is scoped to that tenant. Approval decisions are read
+    from the Task 11 rows, never inferred from a caller-provided flag.
+    """
 
     def __init__(
         self,
         session: AsyncSession,
         tool_client: ToolClient,
+        tenant_id: UUID | str,
         verifier: Verifier | None = None,
     ) -> None:
         self.session = session
         self.tool_client = tool_client
+        self.tenant_id = UUID(str(tenant_id))
         self.verifier = verifier or Verifier(session)
         self._graph = build_graph(self)
 
-    async def start(
-        self, task_id: UUID | str, tenant_id: UUID | str | None = None
-    ) -> ExecutionResult:
+    async def start(self, task_id: UUID | str) -> ExecutionResult:
         """Execute a task whose approval decisions are already resolved."""
 
-        return await self._invoke(task_id, tenant_id, mode="start", approved=None)
+        return await self._invoke(task_id)
 
     async def resume(
-        self,
-        task_id: UUID | str,
-        approved: bool,
-        tenant_id: UUID | str | None = None,
+        self, task_id: UUID | str, approved: bool
     ) -> ExecutionResult:
-        """Re-enter execution after approval decisions; no second approval gate."""
+        """Re-enter execution; persisted approval rows are authoritative.
 
-        return await self._invoke(
-            task_id, tenant_id, mode="resume", approved=approved
-        )
+        ``approved`` is accepted for interface compatibility but never bypasses
+        the Task 11 gate: only nodes whose approval row is ``approved`` run.
+        """
 
-    async def _invoke(
-        self,
-        task_id: UUID | str,
-        tenant_id: UUID | str | None,
-        *,
-        mode: str,
-        approved: bool | None,
-    ) -> ExecutionResult:
+        del approved
+        return await self.start(task_id)
+
+    async def _invoke(self, task_id: UUID | str) -> ExecutionResult:
         initial: ExecutionState = {
             "task_id": str(task_id),
-            "tenant_id": str(tenant_id) if tenant_id is not None else None,
-            "mode": mode,
-            "approved": approved,
+            "tenant_id": str(self.tenant_id),
             "gate": "",
             "reason": "",
             "plan": {},
@@ -141,13 +137,13 @@ class TaskExecutor:
         }
         return ExecutionResult.model_validate(report)
 
-    async def _load_task(
-        self, task_id: UUID, tenant_id: UUID | None = None
-    ) -> TaskRun | None:
-        statement = select(TaskRun).where(TaskRun.id == task_id)
-        if tenant_id is not None:
-            statement = statement.where(TaskRun.tenant_id == tenant_id)
-        return await self.session.scalar(statement)
+    async def _load_task(self, task_id: UUID) -> TaskRun | None:
+        return await self.session.scalar(
+            select(TaskRun).where(
+                TaskRun.id == task_id,
+                TaskRun.tenant_id == self.tenant_id,
+            )
+        )
 
     # Graph nodes ---------------------------------------------------------
 
@@ -155,10 +151,7 @@ class TaskExecutor:
         """Load the task, resolve approvals, and decide whether to execute."""
 
         task_id = UUID(state["task_id"])
-        tenant_id = (
-            UUID(state["tenant_id"]) if state.get("tenant_id") else None
-        )
-        task = await self._load_task(task_id, tenant_id)
+        task = await self._load_task(task_id)
         if task is None:
             return {
                 "gate": "report",
@@ -177,7 +170,7 @@ class TaskExecutor:
                 await self.session.scalars(
                     select(Approval).where(
                         Approval.task_id == task.id,
-                        Approval.tenant_id == task.tenant_id,
+                        Approval.tenant_id == self.tenant_id,
                     )
                 )
             ).all()
@@ -204,16 +197,8 @@ class TaskExecutor:
             if action not in WRITE_ACTIONS:
                 continue
             node_id = str(node["node_id"])
-            requires_approval = bool(node.get("requires_approval"))
-            if not requires_approval:
-                executable.append(node_id)
-                continue
             status = approval_status.get((action, str(node.get("order_id"))))
-            if status in (None, ApprovalStatus.pending.value) and (
-                state.get("mode") == "resume" and state.get("approved") is True
-            ):
-                executable.append(node_id)
-            elif status == ApprovalStatus.approved.value:
+            if status == ApprovalStatus.approved.value:
                 executable.append(node_id)
             else:
                 rejected.append(node_id)
@@ -280,11 +265,24 @@ class TaskExecutor:
                 await self._fail_step(task, node, arguments, f"dry run failed: {exc}")
                 failed.append(node_id)
 
+        skipped_writes = list(state.get("skipped_writes") or [])
+        if failed:
+            # Abort before any write. Nothing written in this run needs
+            # compensation, but every remaining plan node still gets a step.
+            skipped_writes.extend(
+                await self._record_skipped_nodes(
+                    task,
+                    state,
+                    unexecuted_reason="not executed after dry-run failure",
+                )
+            )
+
         return {
             "results": results,
             "completed": _unique(completed),
             "succeeded": _unique(succeeded),
             "failed": _unique(failed),
+            "skipped_writes": _unique(skipped_writes),
         }
 
     async def execute(self, state: ExecutionState) -> dict[str, Any]:
@@ -341,16 +339,7 @@ class TaskExecutor:
             completed.append(node_id)
             succeeded.append(node_id)
 
-        rejected = set(state.get("rejected") or [])
-        for node in state.get("plan", {}).get("nodes", []):
-            node_id = str(node["node_id"])
-            action = node.get("action")
-            if action in WRITE_ACTIONS:
-                if node_id in rejected:
-                    await self._skip_step(task, node, "approval rejected")
-                    skipped_writes.append(node_id)
-            else:
-                await self._skip_step(task, node, f"non-write action: {action}")
+        skipped_writes.extend(await self._record_skipped_nodes(task, state))
 
         return {
             "results": results,
@@ -359,6 +348,41 @@ class TaskExecutor:
             "failed": _unique(failed),
             "skipped_writes": _unique(skipped_writes),
         }
+
+    async def _record_skipped_nodes(
+        self,
+        task: TaskRun,
+        state: ExecutionState,
+        *,
+        unexecuted_reason: str | None = None,
+    ) -> list[str]:
+        """Record skipped non-write, rejected, and aborted write nodes.
+
+        With ``unexecuted_reason`` set, approved write nodes that are still
+        ``running`` from a successful dry run are closed as skipped because the
+        run aborted before execution.
+        """
+
+        skipped: list[str] = []
+        rejected = set(state.get("rejected") or [])
+        for node in state.get("plan", {}).get("nodes", []):
+            node_id = str(node["node_id"])
+            action = node.get("action")
+            if action in WRITE_ACTIONS:
+                if node_id in rejected:
+                    await self._skip_step(task, node, "approval rejected")
+                    skipped.append(node_id)
+                elif unexecuted_reason is not None:
+                    step = await self._existing_step(task.id, node_id)
+                    if (
+                        step is not None
+                        and step.status == StepStatus.running.value
+                    ):
+                        await self._skip_step(task, node, unexecuted_reason)
+                        skipped.append(node_id)
+            else:
+                await self._skip_step(task, node, f"non-write action: {action}")
+        return skipped
 
     async def verify(self, state: ExecutionState) -> dict[str, Any]:
         """Run deterministic post-condition checks for executed writes."""
@@ -459,11 +483,7 @@ class TaskExecutor:
     async def _execution_task(
         self, state: ExecutionState
     ) -> TaskRun | None:
-        task_id = UUID(state["task_id"])
-        tenant_id = (
-            UUID(state["tenant_id"]) if state.get("tenant_id") else None
-        )
-        return await self._load_task(task_id, tenant_id)
+        return await self._load_task(UUID(state["task_id"]))
 
     @staticmethod
     def _plan_by_id(state: ExecutionState) -> dict[str, dict[str, Any]]:
@@ -591,6 +611,7 @@ class TaskExecutor:
     ) -> TaskStep | None:
         return await self.session.scalar(
             select(TaskStep).where(
+                TaskStep.tenant_id == self.tenant_id,
                 TaskStep.task_id == task_id,
                 TaskStep.node_id == node_id,
                 TaskStep.attempt == 1,

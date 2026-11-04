@@ -17,8 +17,6 @@ class ExecutionState(TypedDict, total=False):
 
     task_id: str
     tenant_id: str | None
-    mode: str
-    approved: bool | None
     gate: str
     reason: str
     plan: dict[str, Any]
@@ -57,6 +55,10 @@ def _after_load(state: ExecutionState) -> str:
     return "dry_run" if state.get("gate") == "execute" else "report"
 
 
+def _after_dry_run(state: ExecutionState) -> str:
+    return "report" if state.get("failed") else "execute"
+
+
 def _after_verify(state: ExecutionState) -> str:
     return "report" if state.get("verified") else "compensate"
 
@@ -76,7 +78,10 @@ def build_graph(nodes: ExecutionNodes):
     builder.add_conditional_edges(
         "load", _after_load, {"dry_run": "dry_run", "report": "report"}
     )
-    builder.add_edge("dry_run", "execute")
+    # A failed dry run aborts before any write; nothing needs compensation.
+    builder.add_conditional_edges(
+        "dry_run", _after_dry_run, {"execute": "execute", "report": "report"}
+    )
     builder.add_edge("execute", "verify")
     builder.add_conditional_edges(
         "verify", _after_verify, {"report": "report", "compensate": "compensate"}
