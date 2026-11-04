@@ -16,8 +16,11 @@ class TraceRecorder:
     """Record trace spans on a caller-owned transaction.
 
     ``start`` returns an async context manager that yields the created span, so
-    callers can pass ``span.span_id`` to child spans. Spans are flushed on exit
-    but never committed; the caller decides when the transaction lands.
+    callers can pass ``span.span_id`` to child spans. The span is flushed on
+    enter and on normal exit, but never committed; the caller must commit after
+    the span exits for the final ``ended_at`` update to persist. When the traced
+    block raises, the span's end time and attributes are set in memory, no
+    flush is attempted, and the original exception propagates unchanged.
     """
 
     def __init__(self, session: AsyncSession) -> None:
@@ -45,13 +48,21 @@ class TraceRecorder:
             attributes=initial_attributes or None,
         )
         self.session.add(span)
+        await self.session.flush()
         try:
             yield span
-        finally:
-            span.ended_at = datetime.now(UTC)
-            merged = {**initial_attributes, **(span.attributes or {})}
-            span.attributes = merged or None
+        except BaseException:
+            self._finish(span, initial_attributes)
+            raise
+        else:
+            self._finish(span, initial_attributes)
             await self.session.flush()
+
+    @staticmethod
+    def _finish(span: TraceSpan, initial_attributes: dict[str, Any]) -> None:
+        span.ended_at = datetime.now(UTC)
+        merged = {**initial_attributes, **(span.attributes or {})}
+        span.attributes = merged or None
 
     async def _find_parent(
         self, tenant_id: uuid.UUID, parent_span_id: str | None

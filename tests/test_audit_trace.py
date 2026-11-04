@@ -176,3 +176,30 @@ async def test_parent_span_from_another_tenant_starts_new_trace(seeded_db):
         assert stored[foreign.span_id].trace_id == foreign.trace_id
         assert stored[child.span_id].trace_id == child.trace_id
         assert stored[child.span_id].parent_span_id is None
+
+
+@pytest.mark.asyncio
+async def test_span_exception_propagates_without_flushing(seeded_db, monkeypatch):
+    async with SessionLocal() as session:
+        recorder = TraceRecorder(session)
+
+        with pytest.raises(RuntimeError, match="boom"):
+            async with recorder.start(
+                "failing", task_id=None, tenant_id=TENANT_A
+            ) as span:
+                # The span row is flushed on enter, before the traced block runs.
+                stored = await session.scalar(
+                    select(TraceSpan).where(TraceSpan.span_id == span.span_id)
+                )
+                assert stored is span
+                span.attributes = {"phase": "failing"}
+
+                def explode(*args, **kwargs):
+                    raise AssertionError("flush must not run while an exception is active")
+
+                monkeypatch.setattr(session, "flush", explode)
+                raise RuntimeError("boom")
+
+        assert span.ended_at is not None
+        assert span.attributes == {"phase": "failing"}
+        await session.rollback()
