@@ -171,8 +171,16 @@ async def _approval_rows(
     return [
         {
             "approval": approval,
-            "order_no": order_numbers.get(approval.order_id),
-            "approver": approver_names.get(approval.approver_id),
+            "order_no": (
+                order_numbers.get(approval.order_id)
+                if approval.order_id is not None
+                else None
+            ),
+            "approver": (
+                approver_names.get(approval.approver_id)
+                if approval.approver_id is not None
+                else None
+            ),
         }
         for approval in approvals
     ]

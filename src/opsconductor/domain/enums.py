@@ -45,4 +45,4 @@ class ApprovalStatus(str, Enum):  # noqa: UP042
 
 class OrderStatus(str, Enum):  # noqa: UP042
     pending_shipment = "pending_shipment"
-    split = "split"
+    split = "split"  # type: ignore[assignment]  # collides with str.split

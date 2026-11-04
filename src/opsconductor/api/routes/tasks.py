@@ -1,5 +1,6 @@
-"""Task submission and lookup endpoints."""
+"""Task submission, lookup, and execution endpoints."""
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
@@ -16,6 +17,7 @@ from opsconductor.domain.models import Approval, TaskRun
 from opsconductor.llm.gateway import HttpChatModel
 from opsconductor.observability.audit import write_access_denied
 from opsconductor.observability.trace import TraceRecorder
+from opsconductor.orchestrator.executor import TaskExecutor, ToolClient
 from opsconductor.orchestrator.idempotency import (
     TASK_CREATE_SCOPE,
     IdempotencyConflict,
@@ -30,6 +32,7 @@ from opsconductor.orchestrator.planner import (
 )
 from opsconductor.orchestrator.policy import RiskPolicy
 from opsconductor.schemas import Plan, TaskCreate, TaskRead, validate_plan
+from opsconductor.tools.client import ErpToolClient
 
 TASK_TYPE = "order_exception"
 WRITE_ACTIONS = {"split_order", "change_address"}
@@ -212,12 +215,15 @@ async def submit_task(
         raise HTTPException(status_code=409, detail="idempotency key conflict") from exc
 
 
-@router.get("/api/v1/tasks/{task_id}", response_model=TaskRead)
-async def get_task(
+async def _load_tenant_task(
+    session: AsyncSession,
+    identity: Identity,
     task_id: UUID,
-    identity: Annotated[Identity, Depends(get_identity)],
-    session: Annotated[AsyncSession, Depends(get_session)],
-) -> TaskRead:
+    *,
+    path: str,
+) -> TaskRun:
+    """Return a tenant-owned task, auditing and rejecting foreign access."""
+
     task = await session.get(TaskRun, task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="task not found")
@@ -232,10 +238,14 @@ async def get_task(
             reason="cross-tenant task access",
             evidence={
                 "caller_tenant_id": str(identity.tenant_id),
-                "path": "GET /api/v1/tasks/{task_id}",
+                "path": path,
             },
         )
         raise HTTPException(status_code=403, detail="forbidden")
+    return task
+
+
+def _task_read(task: TaskRun) -> TaskRead:
     return TaskRead(
         id=task.id,
         status=task.status,
@@ -243,3 +253,60 @@ async def get_task(
         plan=task.plan,
         result=task.result,
     )
+
+
+@router.get("/api/v1/tasks/{task_id}", response_model=TaskRead)
+async def get_task(
+    task_id: UUID,
+    identity: Annotated[Identity, Depends(get_identity)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> TaskRead:
+    task = await _load_tenant_task(
+        session,
+        identity,
+        task_id,
+        path="GET /api/v1/tasks/{task_id}",
+    )
+    return _task_read(task)
+
+
+async def get_tool_client() -> AsyncIterator[ToolClient]:
+    """Yield the production MCP stdio client for one execution request."""
+
+    async with ErpToolClient() as client:
+        yield client
+
+
+async def get_execution_target(
+    task_id: UUID,
+    identity: Annotated[Identity, Depends(get_identity)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> TaskRun:
+    """Resolve the task before the MCP subprocess is started for execution."""
+
+    return await _load_tenant_task(
+        session,
+        identity,
+        task_id,
+        path="POST /api/v1/tasks/{task_id}/execute",
+    )
+
+
+@router.post("/api/v1/tasks/{task_id}/execute", response_model=TaskRead)
+async def execute_task(
+    task: Annotated[TaskRun, Depends(get_execution_target)],
+    identity: Annotated[Identity, Depends(get_identity)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    tool_client: Annotated[ToolClient, Depends(get_tool_client)],
+) -> TaskRead:
+    """Execute a task's approved write nodes through the real ERP MCP server.
+
+    The persisted approval rows are authoritative. Pending or expired approvals
+    leave the task ``awaiting_approval`` without any tool call; rejected nodes
+    are skipped; already-succeeded task steps are not repeated on re-entry.
+    """
+
+    executor = TaskExecutor(session, tool_client, identity.tenant_id)
+    await executor.start(task.id)
+    await session.refresh(task)
+    return _task_read(task)

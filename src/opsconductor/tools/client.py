@@ -58,6 +58,9 @@ class ErpToolClient:
         if result.structured_content is not None:
             payload = result.structured_content
         else:
-            payload = json.loads(result.content[0].text)
+            text = getattr(result.content[0], "text", None)
+            if not isinstance(text, str):
+                raise RuntimeError(f"MCP tool {name} returned no text content")
+            payload = json.loads(text)
         faults.check_after(name)
         return payload

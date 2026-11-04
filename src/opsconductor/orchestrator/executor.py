@@ -292,7 +292,8 @@ class TaskExecutor:
                 succeeded.append(node_id)
                 continue
 
-            tool = TOOL_NAMES.get(node.get("action"))
+            action = node.get("action")
+            tool = TOOL_NAMES.get(action) if isinstance(action, str) else None
             try:
                 arguments = self._write_arguments(task, node, dry_run=True)
             except Exception as exc:  # malformed plan node
@@ -301,6 +302,7 @@ class TaskExecutor:
                 )
                 failed.append(node_id)
                 continue
+            assert tool is not None  # _write_arguments rejects unknown actions
             await self._begin_step(task, node, arguments)
             try:
                 await self._call_tool(task, tool, arguments)
@@ -502,7 +504,12 @@ class TaskExecutor:
             if node is None:
                 failures.append(node_id)
                 continue
-            tool = COMPENSATION_TOOLS.get(node.get("action"))
+            action = node.get("action")
+            tool = (
+                COMPENSATION_TOOLS.get(action)
+                if isinstance(action, str)
+                else None
+            )
             output = results.get(node_id) or {}
             if tool is None:
                 await self._compensation_failed_step(

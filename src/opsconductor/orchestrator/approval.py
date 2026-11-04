@@ -14,11 +14,20 @@ from opsconductor.observability.trace import TraceRecorder
 
 
 class ApprovalActor(Protocol):
-    """Authenticated caller allowed to decide approvals."""
+    """Authenticated caller allowed to decide approvals.
 
-    tenant_id: UUID
-    user_id: UUID
-    role: str
+    Read-only properties let frozen identity objects (``Identity``) satisfy the
+    protocol without requiring mutable attributes.
+    """
+
+    @property
+    def tenant_id(self) -> UUID: ...
+
+    @property
+    def user_id(self) -> UUID: ...
+
+    @property
+    def role(self) -> str: ...
 
 
 class ApprovalError(Exception):
