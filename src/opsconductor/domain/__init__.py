@@ -19,6 +19,7 @@ from opsconductor.domain.models import (
     User,
     Warehouse,
 )
+from opsconductor.domain.seed import seed
 
 __all__ = [
     "Base",
@@ -40,4 +41,5 @@ __all__ = [
     "AuditLog",
     "IdempotencyKey",
     "TraceSpan",
+    "seed",
 ]

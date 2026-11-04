@@ -23,3 +23,13 @@ async def test_engine():
         await conn.run_sync(Base.metadata.create_all)
     yield engine
     await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def seeded_db(test_engine):
+    from opsconductor.db import SessionLocal
+    from opsconductor.domain.seed import seed
+
+    async with SessionLocal() as session:
+        await seed(session)
+    yield
