@@ -1,10 +1,9 @@
-"""Address validity and normalization helpers shared by tools and planners.
+"""工具与 planner 共用的地址校验与归一化辅助函数。
 
-An address is the six-field mapping in :data:`ADDRESS_FIELDS`. Validation needs
-``receiver_name``, ``phone``, ``province``, ``city``, and ``district`` to be
-non-empty, requires a mainland Chinese mobile number, and requires
-``address_detail`` to contain non-whitespace text. Helpers never mutate the
-order they receive.
+地址是 :data:`ADDRESS_FIELDS` 中的六字段映射。校验要求 ``receiver_name``、
+``phone``、``province``、``city`` 与 ``district`` 非空，要求手机号为
+中国大陆手机号，并要求 ``address_detail`` 包含非空白文本。这些辅助函数
+从不修改传入的订单。
 """
 
 import re
@@ -24,19 +23,18 @@ ADDRESS_FIELDS: tuple[str, ...] = (
 
 
 def address_fields_are_valid(values: Mapping[str, Any]) -> bool:
-    """Check a candidate address mapping against the persisted-order rules.
+    """按照持久化订单的规则校验候选地址映射。
 
-    The mapping is validated as a whole: the first five fields must be
-    non-empty, ``phone`` must match the mainland Chinese mobile format
-    ``1[3-9]`` followed by nine digits, and ``address_detail`` must contain
-    non-whitespace text. Extra keys are ignored.
+    校验以整体为单位进行：前五个字段必须非空，``phone`` 必须匹配中国大陆手机
+    号格式（``1[3-9]`` 后跟九位数字），``address_detail`` 必须包含非空白文本。
+    多余的键会被忽略。
 
     Args:
-        values: Address-like mapping; missing keys fail validation.
+        values: 类似地址的映射；缺少键会导致校验失败。
 
     Returns:
-        ``True`` when every rule passes, ``False`` otherwise. Malformed values
-        are reported as invalid rather than raised.
+        所有规则都通过时返回 ``True``，否则返回 ``False``。格式错误的值会被
+        判定为无效，而不是抛出异常。
     """
 
     for field in ("receiver_name", "phone", "province", "city", "district"):
@@ -50,31 +48,29 @@ def address_fields_are_valid(values: Mapping[str, Any]) -> bool:
 
 
 def order_address(order: SalesOrder) -> dict[str, str]:
-    """Snapshot an order's address fields as a plain mapping.
+    """将订单的地址字段快照为普通映射。
 
-    Missing or null attributes become empty strings, so the result is always a
-    six-key, JSON-serializable mapping suitable for audit ``before`` and
-    ``after`` payloads.
+    缺失或为 null 的属性会变为空字符串，因此结果始终是包含六个键、可 JSON
+    序列化的映射，适用于审计的 ``before`` 与 ``after`` 载荷。
 
     Args:
-        order: Order whose address columns are read.
+        order: 读取其地址列的订单。
 
     Returns:
-        A new mapping keyed by :data:`ADDRESS_FIELDS`.
+        以 :data:`ADDRESS_FIELDS` 为键的新映射。
     """
 
     return {field: getattr(order, field, "") or "" for field in ADDRESS_FIELDS}
 
 
 def address_is_valid(order: SalesOrder) -> bool:
-    """Return whether an order's stored address passes validation.
+    """返回订单已存储的地址是否通过校验。
 
     Args:
-        order: Order to validate.
+        order: 待校验的订单。
 
     Returns:
-        ``True`` when the order's address fields satisfy
-        :func:`address_fields_are_valid`.
+        订单的地址字段满足 :func:`address_fields_are_valid` 时返回 ``True``。
     """
 
     return address_fields_are_valid(
@@ -83,20 +79,20 @@ def address_is_valid(order: SalesOrder) -> bool:
 
 
 def normalized_address(order: SalesOrder) -> str:
-    """Return a non-empty ``address_detail`` for display and tool payloads.
+    """返回非空的 ``address_detail``，供展示与工具载荷使用。
 
-    When the stored detail is blank, a deterministic placeholder built from the
-    order's city and district is returned instead of an empty string.
+    当存储的详细地址为空时，返回基于订单城市与区县构造的确定性占位符，而不是
+    空字符串。
 
     Args:
-        order: Order whose address detail is read.
+        order: 读取其地址详情的订单。
 
     Returns:
-        The trimmed detail, or a synthesized placeholder when it is blank.
+        去除首尾空白后的详情；若为空则返回合成的占位符。
 
     Note:
-        The fallback is demo data, not a verified delivery address; it exists
-        so planners can still produce a complete address payload.
+        该回退值是演示数据，并非经过核验的收货地址；它的存在只是为了让
+        planner 仍能生成完整的地址载荷。
     """
 
     detail = (order.address_detail or "").strip()

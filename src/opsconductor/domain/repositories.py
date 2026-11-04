@@ -1,10 +1,8 @@
-"""Tenant-scoped read-only queries for ERP entities.
+"""面向 ERP 实体的租户隔离只读查询。
 
-Every function requires a ``tenant_id`` and filters on it, so a UUID belonging
-to another tenant is indistinguishable from a missing row. Queries only read:
-they never commit, roll back, or flush. Callers own the session and its
-transaction, and returned ORM objects stay bound to that session until it is
-closed.
+每个函数都要求 ``tenant_id`` 并按其过滤，因此属于其他租户的 UUID 与不存在的
+行无法区分。查询只读：从不提交、回滚或 flush。会话及其事务由调用方负责，
+返回的 ORM 对象在会话关闭前始终绑定到该会话。
 """
 
 from datetime import datetime
@@ -22,23 +20,22 @@ async def list_overdue_orders(
     warehouse: str | None = None,
     cutoff: datetime | None = None,
 ) -> list[SalesOrder]:
-    """List pending shipments, optionally narrowed by warehouse and age.
+    """列出待发货订单，可选按仓库与时间范围收窄。
 
     Args:
-        session: Caller-owned session used for the read.
-        tenant_id: Tenant whose orders are returned; never omitted.
-        warehouse: Exact warehouse name within the tenant. ``None`` keeps
-            orders from every warehouse.
-        cutoff: Return only orders created strictly before this timestamp.
-            ``None`` keeps orders of any age.
+        session: 调用方拥有的会话，用于本次读取。
+        tenant_id: 返回其订单的租户；不可省略。
+        warehouse: 租户内的精确仓库名称。``None`` 表示保留所有仓库的订单。
+        cutoff: 仅返回创建时间严格早于该时间戳的订单。``None`` 表示不限订单
+            时间。
 
     Returns:
-        Matching ``SalesOrder`` rows ordered oldest first by ``created_at``;
-        an empty list when nothing matches.
+        匹配的 ``SalesOrder`` 行，按 ``created_at`` 从旧到新排序；无匹配时返回
+        空列表。
 
     Note:
-        Pass a timezone-aware ``cutoff`` so the comparison against the
-        timezone-aware ``created_at`` column is unambiguous.
+        请传入带时区的 ``cutoff``，以便与带时区的 ``created_at`` 列比较时不存在
+        歧义。
     """
 
     stmt = select(SalesOrder).where(
@@ -56,15 +53,15 @@ async def list_overdue_orders(
 
 
 async def get_order(session: AsyncSession, tenant_id: UUID, order_id: UUID) -> SalesOrder | None:
-    """Fetch one order by ID within a tenant.
+    """在租户内按 ID 获取单个订单。
 
     Args:
-        session: Caller-owned session used for the read.
-        tenant_id: Tenant that must own the order.
-        order_id: Order UUID; an ID from another tenant yields ``None``.
+        session: 调用方拥有的会话，用于本次读取。
+        tenant_id: 必须拥有该订单的租户。
+        order_id: 订单 UUID；来自其他租户的 ID 会返回 ``None``。
 
     Returns:
-        The matching order, or ``None`` when it does not exist in the tenant.
+        匹配的订单；在该租户中不存在时返回 ``None``。
     """
 
     return await session.scalar(
@@ -75,16 +72,16 @@ async def get_order(session: AsyncSession, tenant_id: UUID, order_id: UUID) -> S
 async def list_order_lines(
     session: AsyncSession, tenant_id: UUID, order_id: UUID
 ) -> list[OrderLine]:
-    """List an order's lines within a tenant.
+    """列出租户内某个订单的明细行。
 
     Args:
-        session: Caller-owned session used for the read.
-        tenant_id: Tenant that must own both the order and its lines.
-        order_id: Order whose lines are returned.
+        session: 调用方拥有的会话，用于本次读取。
+        tenant_id: 必须同时拥有该订单及其明细的租户。
+        order_id: 返回其明细的订单。
 
     Returns:
-        The order's ``OrderLine`` rows in no guaranteed order; empty when the
-        order has no lines or is not in the tenant.
+        该订单的 ``OrderLine`` 行，顺序不作保证；订单没有明细或不属于该租户时
+        返回空列表。
     """
 
     return list(
@@ -101,17 +98,16 @@ async def list_order_lines(
 async def get_inventory(
     session: AsyncSession, tenant_id: UUID, sku_id: UUID, warehouse_id: UUID
 ) -> Inventory | None:
-    """Fetch the stock row for one SKU and warehouse in a tenant.
+    """获取租户内某个 SKU 与仓库的库存行。
 
     Args:
-        session: Caller-owned session used for the read.
-        tenant_id: Tenant that must own the inventory row.
-        sku_id: SKU whose position is read.
-        warehouse_id: Warehouse whose position is read.
+        session: 调用方拥有的会话，用于本次读取。
+        tenant_id: 必须拥有该库存行的租户。
+        sku_id: 读取其库存的 SKU。
+        warehouse_id: 读取其库存的仓库。
 
     Returns:
-        The unique matching row, or ``None`` when that pair has no inventory
-        record in this tenant.
+        唯一的匹配行；该组合在此租户中没有库存记录时返回 ``None``。
     """
 
     return await session.scalar(
@@ -126,16 +122,16 @@ async def get_inventory(
 async def list_shipments(
     session: AsyncSession, tenant_id: UUID, order_id: UUID
 ) -> list[Shipment]:
-    """List the shipments created for an order within a tenant.
+    """列出租户内为某个订单创建的发运单。
 
     Args:
-        session: Caller-owned session used for the read.
-        tenant_id: Tenant that must own the shipments.
-        order_id: Order whose shipments are returned.
+        session: 调用方拥有的会话，用于本次读取。
+        tenant_id: 必须拥有这些发运单的租户。
+        order_id: 返回其发运单的订单。
 
     Returns:
-        All matching ``Shipment`` rows in no guaranteed order, including
-        cancelled ones; empty when the order has not been split.
+        所有匹配的 ``Shipment`` 行，顺序不作保证，包含已取消的发运单；订单尚未
+        拆分时返回空列表。
     """
 
     return list(

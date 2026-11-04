@@ -1,9 +1,8 @@
-"""Pydantic request, plan, and response schemas at the orchestration boundary.
+"""编排边界上的 Pydantic 请求、计划与响应 schema。
 
-These models validate external input before it reaches the domain layer. Plans
-use string IDs because they are produced and persisted as JSON; nested ``params``
-and ``evidence`` payloads must stay JSON-serializable, and callers persist them
-with ``model_dump(mode="json")``.
+这些模型在外部输入到达领域层之前对其进行校验。计划使用字符串 ID，因为它们
+以 JSON 形式产生和持久化；嵌套的 ``params`` 与 ``evidence`` 载荷必须保持可
+JSON 序列化，调用方用 ``model_dump(mode="json")`` 持久化它们。
 """
 
 from __future__ import annotations
@@ -18,15 +17,15 @@ from opsconductor.domain.enums import RiskLevel
 
 
 class TaskCreate(BaseModel):
-    """Request body that starts a new orchestration task.
+    """启动新编排任务的请求体。
 
-    ``instruction`` is the operator's natural-language request, ``warehouse``
-    optionally scopes the task to a named warehouse, and ``cutoff`` is an
-    optional ISO 8601 timestamp bounding how old affected orders may be.
+    ``instruction`` 是操作员的自然语言请求，``warehouse`` 可选地把任务限定到
+    指定名称的仓库，``cutoff`` 是可选的 ISO 8601 时间戳，用于限制受影响订单
+    的最早时间。
 
     Note:
-        ``cutoff`` is validated here but kept as the original string; the
-        planner parses it when it builds read-tool arguments.
+        ``cutoff`` 在此处校验但保留原始字符串；planner 在构建读取工具参数时
+        才会解析它。
     """
 
     instruction: str = Field(min_length=2, max_length=1000)
@@ -46,18 +45,17 @@ class TaskCreate(BaseModel):
 
 
 class PlanNode(BaseModel):
-    """One action in a plan, with its dependencies and risk metadata.
+    """计划中的一个动作，包含其依赖与风险元数据。
 
-    ``node_id`` is stable within the plan. ``action`` selects the tool family;
-    ``order_id`` is absent for task-level actions such as ``report``. ``params``
-    and ``evidence`` are JSON payloads. ``depends_on`` lists node IDs that must
-    succeed before this node runs, while ``compensation`` may record the
-    planner's compensation hint.
+    ``node_id`` 在计划内保持稳定。``action`` 选择工具族；对于 ``report`` 这类
+    任务级动作，``order_id`` 不存在。``params`` 与 ``evidence`` 是 JSON 载荷。
+    ``depends_on`` 列出本节点运行前必须成功的节点 ID，``compensation`` 可记录
+    planner 的补偿提示。
 
     Note:
-        Clients may propose nodes, but the risk policy rewrites ``risk`` and
-        ``requires_approval`` before execution; execution derives the actual
-        compensation tool from ``action``.
+        客户端可以提议节点，但风险策略会在执行前重写 ``risk`` 与
+        ``requires_approval``；执行器会根据 ``action`` 推导实际使用的补偿
+        工具。
     """
 
     node_id: str
@@ -73,15 +71,15 @@ class PlanNode(BaseModel):
 
 
 class Plan(BaseModel):
-    """Dependency graph of nodes that implements a task.
+    """实现某个任务的节点依赖图。
 
-    ``task_id`` is a string rather than a UUID because plans are exchanged and
-    stored as JSON; it must equal the owning task's string UUID. ``nodes``
-    order is only a hint, since execution follows ``depends_on``.
-    ``requires_l3`` is set when at least one node is graded L3.
+    ``task_id`` 使用字符串而非 UUID，因为计划以 JSON 形式交换和存储；它必须
+    等于所属任务的字符串 UUID。``nodes`` 的顺序只是提示，执行时以
+    ``depends_on`` 为准。当至少一个节点被评为 L3 时，``requires_l3`` 会被
+    置位。
 
     Note:
-        A plan is not executable until :func:`validate_plan` accepts it.
+        在 :func:`validate_plan` 接受计划之前，计划不可执行。
     """
 
     task_id: str
@@ -91,10 +89,9 @@ class Plan(BaseModel):
 
 
 class ApprovalDecision(BaseModel):
-    """Decision submitted by an approver for a pending approval.
+    """审批人为待审批项提交的裁决。
 
-    ``approved`` is the verdict and ``comment`` is optional free-text context
-    stored alongside it.
+    ``approved`` 是裁决结果，``comment`` 是随之一同存储的可选自由文本上下文。
     """
 
     approved: bool
@@ -102,11 +99,10 @@ class ApprovalDecision(BaseModel):
 
 
 class TaskReport(BaseModel):
-    """Outcome summary returned after executing a task.
+    """任务执行后返回的结果摘要。
 
-    Node IDs are grouped by outcome: ``succeeded``, ``skipped``, ``failed``,
-    and still ``pending``. ``message`` explains the terminal status, including
-    why a run stopped before executing writes.
+    节点 ID 按结果分组：``succeeded``、``skipped``、``failed`` 以及仍为
+    ``pending`` 的节点。``message`` 说明最终状态，包括运行在写入前中止的原因。
     """
 
     task_id: str
@@ -119,10 +115,10 @@ class TaskReport(BaseModel):
 
 
 class TaskRead(BaseModel):
-    """Read model exposing a task's stored state.
+    """暴露任务已存储状态的读取模型。
 
-    ``plan`` and ``result`` are the raw JSON snapshots stored on the task and
-    are ``None`` until the corresponding phase has produced them.
+    ``plan`` 与 ``result`` 是存储在任务上的原始 JSON 快照，在对应阶段产出之前
+    为 ``None``。
     """
 
     id: UUID
@@ -133,20 +129,20 @@ class TaskRead(BaseModel):
 
 
 def validate_plan(plan: Plan) -> None:
-    """Validate the plan DAG before it is stored or executed.
+    """在存储或执行之前校验计划 DAG。
 
-    Checks run in a fixed order: duplicate node IDs, dependencies on unknown
-    nodes, then cycles. The plan is inspected in place and left unchanged.
+    检查按固定顺序进行：重复的节点 ID、依赖未知节点，最后是环。计划仅被原地
+    检查，不会被修改。
 
     Args:
-        plan: Plan whose node graph is checked.
+        plan: 校验其节点图的计划。
 
     Returns:
-        ``None`` when the graph is well-formed.
+        图结构良好时返回 ``None``。
 
     Raises:
-        ValueError: If a ``node_id`` repeats, a ``depends_on`` entry names a
-            node that does not exist, or the dependency graph contains a cycle.
+        ValueError: 当 ``node_id`` 重复、``depends_on`` 中的条目指向不存在的
+            节点，或依赖图包含环时抛出。
     """
 
     ids = [node.node_id for node in plan.nodes]

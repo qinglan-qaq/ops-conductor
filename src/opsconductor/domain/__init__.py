@@ -1,11 +1,11 @@
-"""Domain layer: ORM base, models, enums, address rules, and repositories.
+"""领域层：ORM 基类、模型、枚举、地址规则与仓储。
 
-The package re-exports the declarative base, every ORM model, and the demo
-seeder so callers can import from ``opsconductor.domain`` directly.
+本包重新导出声明式基类、所有 ORM 模型以及演示数据填充器，调用方可以直接从
+``opsconductor.domain`` 导入。
 
 Note:
-    Every business table is tenant-scoped. Queries must filter on
-    ``tenant_id``; an ID alone is never proof that the caller may access a row.
+    所有业务表都按租户隔离。查询必须按 ``tenant_id`` 过滤；仅有 ID 绝不能证明
+    调用方有权访问某行。
 """
 
 from opsconductor.domain.base import Base

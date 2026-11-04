@@ -1,13 +1,12 @@
-"""Process-wide async database engine and session factory.
+"""进程级异步数据库引擎与会话工厂。
 
-The module switches Windows to the selector event loop policy before creating
-the ``psycopg`` async engine, which that driver requires. Importing the module
-therefore changes process state, including in MCP stdio subprocesses that
-import OpsConductor.
+由于 ``psycopg`` 异步驱动要求 selector 事件循环，本模块会在创建
+``psycopg`` 异步引擎之前将 Windows 切换为该策略。因此，导入本模块会改变
+进程状态，导入 OpsConductor 的 MCP stdio 子进程同样如此。
 
-Transactions belong to callers: :func:`get_session` only scopes the session's
-lifetime and rolls back uncommitted work when it closes. Services in
-:mod:`opsconductor.domain.write_service` decide when to commit.
+事务由调用方负责：:func:`get_session` 仅限定会话的生命周期，并在关闭时回滚
+未提交的工作。何时提交由 :mod:`opsconductor.domain.write_service` 中的服务
+决定。
 """
 
 import asyncio
@@ -29,19 +28,17 @@ SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:
-    """Yield one session per request and close it on exit.
+    """每次请求产出一个会话，并在退出时关闭。
 
-    Intended for FastAPI dependency injection. The session is not committed
-    automatically; code that mutates state must commit explicitly. On exit the
-    context manager rolls back any uncommitted work and returns the connection
-    to the pool.
+    用于 FastAPI 依赖注入。会话不会自动提交；修改状态的代码必须显式提交。退出
+    时上下文管理器会回滚所有未提交的工作，并将连接归还连接池。
 
     Yields:
-        An ``AsyncSession`` bound to the shared engine.
+        绑定到共享引擎的 ``AsyncSession``。
 
     Note:
-        ``SessionLocal`` sets ``expire_on_commit=False``, so loaded attributes
-        remain readable after a commit without an extra refresh.
+        ``SessionLocal`` 设置了 ``expire_on_commit=False``，因此提交后已加载的
+        属性无需额外刷新即可继续读取。
     """
     async with SessionLocal() as session:
         yield session
