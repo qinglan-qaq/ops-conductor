@@ -160,17 +160,19 @@ async def create_task(
         "cutoff": payload.cutoff,
     }
     task.plan = plan_payload
-    task.status = "awaiting_approval"
     now = datetime.now(UTC)
-    session.add_all(
-        _build_approvals(
-            plan,
-            tenant_id=identity.tenant_id,
-            task_id=task.id,
-            settings=settings,
-            now=now,
-        )
+    approvals = _build_approvals(
+        plan,
+        tenant_id=identity.tenant_id,
+        task_id=task.id,
+        settings=settings,
+        now=now,
     )
+    if approvals:
+        task.status = "awaiting_approval"
+        session.add_all(approvals)
+    else:
+        task.status = "planned"
 
     read = TaskRead(
         id=task.id,

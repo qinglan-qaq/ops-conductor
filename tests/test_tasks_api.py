@@ -8,6 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from opsconductor.api.main import app
+from opsconductor.config import get_settings
 from opsconductor.db import SessionLocal
 from opsconductor.domain.models import Approval, IdempotencyKey, TaskRun
 from opsconductor.domain.seed import TENANT_A
@@ -177,3 +178,124 @@ async def test_created_task_has_pending_l2_approvals(seeded_db):
             node for node in task.plan["nodes"] if node["action"] == "split_order"
         ]
         assert len(split_nodes) >= 1
+
+
+@pytest.mark.asyncio
+async def test_l3_threshold_marks_every_split_node(seeded_db, monkeypatch):
+    monkeypatch.setattr(get_settings(), "l3_batch_threshold", 3)
+
+    async with _client() as client:
+        created = await client.post(TASK_URL, json=BODY, headers=_headers(key="l3-1"))
+        assert created.status_code == 200
+
+    payload = created.json()
+    nodes = payload["plan"]["nodes"]
+    split_nodes = [node for node in nodes if node["action"] == "split_order"]
+    assert len(split_nodes) == 3
+    assert all(node["risk"] == "L3" for node in split_nodes)
+    assert all(node["requires_approval"] is True for node in split_nodes)
+    assert payload["plan"]["requires_l3"] is True
+
+    change_nodes = [node for node in nodes if node["action"] == "change_address"]
+    assert change_nodes
+    assert all(
+        node["risk"] == "L2" and node["requires_approval"] is True
+        for node in change_nodes
+    )
+
+    block_nodes = [node for node in nodes if node["action"] == "block_order"]
+    assert block_nodes
+    assert all(
+        node["risk"] == "L0" and node["requires_approval"] is False
+        for node in block_nodes
+    )
+
+    async with SessionLocal() as session:
+        approvals = list(
+            (
+                await session.scalars(
+                    select(Approval).where(Approval.task_id == UUID(payload["id"]))
+                )
+            ).all()
+        )
+
+    split_approvals = [
+        approval for approval in approvals if approval.action == "split_order"
+    ]
+    change_approvals = [
+        approval for approval in approvals if approval.action == "change_address"
+    ]
+    assert len(split_approvals) == 3
+    assert all(approval.risk_level == "L3" for approval in split_approvals)
+    assert len(change_approvals) == 1
+    assert change_approvals[0].risk_level == "L2"
+    assert len(approvals) == 4
+
+
+@pytest.mark.asyncio
+async def test_l3_threshold_is_inclusive_at_the_boundary(seeded_db, monkeypatch):
+    monkeypatch.setattr(get_settings(), "l3_batch_threshold", 4)
+
+    async with _client() as client:
+        created = await client.post(TASK_URL, json=BODY, headers=_headers(key="l3-2"))
+        assert created.status_code == 200
+
+    payload = created.json()
+    split_nodes = [
+        node for node in payload["plan"]["nodes"] if node["action"] == "split_order"
+    ]
+    assert len(split_nodes) == 3
+    assert all(node["risk"] == "L2" for node in split_nodes)
+    assert payload["plan"]["requires_l3"] is False
+
+    async with SessionLocal() as session:
+        approvals = list(
+            (
+                await session.scalars(
+                    select(Approval).where(Approval.task_id == UUID(payload["id"]))
+                )
+            ).all()
+        )
+    assert {approval.risk_level for approval in approvals} == {"L2"}
+
+
+@pytest.mark.asyncio
+async def test_invalid_cutoff_returns_422(seeded_db):
+    async with _client() as client:
+        response = await client.post(
+            TASK_URL,
+            json={**BODY, "cutoff": "yesterday"},
+            headers=_headers(key="bad-cutoff"),
+        )
+        assert response.status_code == 422
+
+    async with SessionLocal() as session:
+        assert (await session.scalars(select(TaskRun))).all() == []
+
+
+@pytest.mark.asyncio
+async def test_plan_without_write_nodes_stays_planned(seeded_db):
+    async with _client() as client:
+        response = await client.post(
+            TASK_URL,
+            json={**BODY, "warehouse": "south"},
+            headers=_headers(key="no-orders"),
+        )
+        assert response.status_code == 200
+
+    payload = response.json()
+    assert payload["status"] == "planned"
+    assert payload["plan"]["nodes"] == []
+
+    async with SessionLocal() as session:
+        task = await session.scalar(
+            select(TaskRun).where(TaskRun.id == UUID(payload["id"]))
+        )
+        assert task is not None
+        assert task.status == "planned"
+        approvals = (
+            await session.scalars(
+                select(Approval).where(Approval.task_id == task.id)
+            )
+        ).all()
+        assert approvals == []

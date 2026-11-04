@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from opsconductor.domain.enums import RiskLevel
 
@@ -12,6 +13,17 @@ class TaskCreate(BaseModel):
     instruction: str = Field(min_length=2, max_length=1000)
     warehouse: str | None = None
     cutoff: str | None = None
+
+    @field_validator("cutoff")
+    @classmethod
+    def _validate_cutoff(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return value
+        try:
+            datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("cutoff must be an ISO 8601 timestamp") from exc
+        return value
 
 
 class PlanNode(BaseModel):
