@@ -617,16 +617,6 @@ async def change_address(
             "after": after,
             "version": order.version,
         }
-        session.add(
-            IdempotencyKey(
-                tenant_id=tenant_id,
-                scope=scope,
-                key=idempotency_key,
-                request_hash=fingerprint,
-                response=response,
-                status="completed",
-            )
-        )
         await write_audit(
             session,
             tenant_id=tenant_id,
@@ -638,6 +628,18 @@ async def change_address(
             before=before,
             after=after,
             evidence={"version": order.version},
+        )
+        # Stage the idempotency row last: its unique constraint must surface at
+        # the final commit so _commit_or_replay can replay the winning response.
+        session.add(
+            IdempotencyKey(
+                tenant_id=tenant_id,
+                scope=scope,
+                key=idempotency_key,
+                request_hash=fingerprint,
+                response=response,
+                status="completed",
+            )
         )
         replayed = await _commit_or_replay(
             session, tenant_id, scope, idempotency_key, fingerprint
@@ -693,16 +695,6 @@ async def revert_address(
             "after": target,
             "version": order.version,
         }
-        session.add(
-            IdempotencyKey(
-                tenant_id=tenant_id,
-                scope=scope,
-                key=idempotency_key,
-                request_hash=fingerprint,
-                response=response,
-                status="completed",
-            )
-        )
         await write_audit(
             session,
             tenant_id=tenant_id,
@@ -714,6 +706,18 @@ async def revert_address(
             before=current,
             after=target,
             evidence={"version": order.version},
+        )
+        # Stage the idempotency row last so a concurrent duplicate key fails at
+        # commit and is replayed by _commit_or_replay instead of during a flush.
+        session.add(
+            IdempotencyKey(
+                tenant_id=tenant_id,
+                scope=scope,
+                key=idempotency_key,
+                request_hash=fingerprint,
+                response=response,
+                status="completed",
+            )
         )
         replayed = await _commit_or_replay(
             session, tenant_id, scope, idempotency_key, fingerprint
@@ -849,16 +853,6 @@ async def split_order(
             "shipments": len(normalized),
             "shipment_ids": [str(shipment_id) for shipment_id in shipment_ids],
         }
-        session.add(
-            IdempotencyKey(
-                tenant_id=tenant_id,
-                scope=scope,
-                key=idempotency_key,
-                request_hash=fingerprint,
-                response=response,
-                status="completed",
-            )
-        )
         await write_audit(
             session,
             tenant_id=tenant_id,
@@ -873,6 +867,18 @@ async def split_order(
                 "impact": impact,
                 "shipment_ids": response["shipment_ids"],
             },
+        )
+        # Stage the idempotency row last so a concurrent duplicate key fails at
+        # commit and is replayed by _commit_or_replay instead of during a flush.
+        session.add(
+            IdempotencyKey(
+                tenant_id=tenant_id,
+                scope=scope,
+                key=idempotency_key,
+                request_hash=fingerprint,
+                response=response,
+                status="completed",
+            )
         )
         replayed = await _commit_or_replay(
             session, tenant_id, scope, idempotency_key, fingerprint
@@ -935,16 +941,6 @@ async def cancel_split(
             "status": "compensated",
             "shipments_cancelled": cancelled,
         }
-        session.add(
-            IdempotencyKey(
-                tenant_id=tenant_id,
-                scope=scope,
-                key=idempotency_key,
-                request_hash=fingerprint,
-                response=response,
-                status="completed",
-            )
-        )
         await write_audit(
             session,
             tenant_id=tenant_id,
@@ -956,6 +952,18 @@ async def cancel_split(
             before={"status": "split"},
             after={"status": "pending_shipment"},
             evidence={"shipments": cancelled, "released": released},
+        )
+        # Stage the idempotency row last so a concurrent duplicate key fails at
+        # commit and is replayed by _commit_or_replay instead of during a flush.
+        session.add(
+            IdempotencyKey(
+                tenant_id=tenant_id,
+                scope=scope,
+                key=idempotency_key,
+                request_hash=fingerprint,
+                response=response,
+                status="completed",
+            )
         )
         replayed = await _commit_or_replay(
             session, tenant_id, scope, idempotency_key, fingerprint
@@ -1021,16 +1029,6 @@ async def cancel_shipment(
             "already_cancelled": False,
             "released": released,
         }
-        session.add(
-            IdempotencyKey(
-                tenant_id=tenant_id,
-                scope=scope,
-                key=idempotency_key,
-                request_hash=fingerprint,
-                response=response,
-                status="completed",
-            )
-        )
         await write_audit(
             session,
             tenant_id=tenant_id,
@@ -1042,6 +1040,18 @@ async def cancel_shipment(
             before={"status": "created"},
             after={"status": "cancelled"},
             evidence={"released": released},
+        )
+        # Stage the idempotency row last so a concurrent duplicate key fails at
+        # commit and is replayed by _commit_or_replay instead of during a flush.
+        session.add(
+            IdempotencyKey(
+                tenant_id=tenant_id,
+                scope=scope,
+                key=idempotency_key,
+                request_hash=fingerprint,
+                response=response,
+                status="completed",
+            )
         )
         replayed = await _commit_or_replay(
             session, tenant_id, scope, idempotency_key, fingerprint
@@ -1109,16 +1119,6 @@ async def release_inventory(
             "shipments_cancelled": cancelled,
             "released": released,
         }
-        session.add(
-            IdempotencyKey(
-                tenant_id=tenant_id,
-                scope=scope,
-                key=idempotency_key,
-                request_hash=fingerprint,
-                response=response,
-                status="completed",
-            )
-        )
         await write_audit(
             session,
             tenant_id=tenant_id,
@@ -1130,6 +1130,18 @@ async def release_inventory(
             before={"status": "split"},
             after={"status": "split"},
             evidence={"shipments": cancelled, "released": released},
+        )
+        # Stage the idempotency row last so a concurrent duplicate key fails at
+        # commit and is replayed by _commit_or_replay instead of during a flush.
+        session.add(
+            IdempotencyKey(
+                tenant_id=tenant_id,
+                scope=scope,
+                key=idempotency_key,
+                request_hash=fingerprint,
+                response=response,
+                status="completed",
+            )
         )
         replayed = await _commit_or_replay(
             session, tenant_id, scope, idempotency_key, fingerprint

@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import func, select
 
 from opsconductor.db import SessionLocal
+from opsconductor.domain import write_service as write_service_module
 from opsconductor.domain.models import (
     AuditLog,
     IdempotencyKey,
@@ -120,6 +121,28 @@ async def _pending_order_with_shipment(order_no: str) -> uuid.UUID:
         )
         await session.commit()
     return order_id
+
+
+def _skip_first_replay(monkeypatch) -> None:
+    """Make one write miss an already-committed key, like an overlapped retry.
+
+    The loser session runs its replay lookup before the winner commits, so it
+    proceeds to stage its own audit and idempotency rows. Only the later commit
+    reveals the duplicate key, which is exactly the window _commit_or_replay
+    must handle.
+    """
+
+    real_replay = write_service_module._replay
+    calls = 0
+
+    async def replay_with_stale_first_check(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return None
+        return await real_replay(*args, **kwargs)
+
+    monkeypatch.setattr(write_service_module, "_replay", replay_with_stale_first_check)
 
 
 @pytest.mark.asyncio
@@ -391,6 +414,85 @@ async def test_change_address_is_idempotent_and_rejects_changed_body(seeded_db):
         order = await _order(session, ORDER_O1002)
         assert order.version == 1
         assert _address(order) == NEW_ADDRESS
+        assert await _count(session, AuditLog, AuditLog.tenant_id == TENANT_A) == 1
+        assert await _count(session, IdempotencyKey, IdempotencyKey.tenant_id == TENANT_A) == 1
+
+
+@pytest.mark.asyncio
+async def test_concurrent_retry_loser_replays_committed_response(seeded_db, monkeypatch):
+    """A loser whose replay check predates the winner's commit must replay it."""
+
+    async with SessionLocal() as winner:
+        first = await change_address(
+            winner,
+            TENANT_A,
+            ORDER_O1002,
+            NEW_ADDRESS,
+            "change-race",
+            dry_run=False,
+            actor_id=OPERATOR_ID,
+            task_id=None,
+        )
+
+    _skip_first_replay(monkeypatch)
+
+    async with SessionLocal() as loser:
+        second = await change_address(
+            loser,
+            TENANT_A,
+            ORDER_O1002,
+            NEW_ADDRESS,
+            "change-race",
+            dry_run=False,
+            actor_id=OPERATOR_ID,
+            task_id=None,
+        )
+
+    assert second == first
+
+    async with SessionLocal() as session:
+        order = await _order(session, ORDER_O1002)
+        assert (order.status, order.version) == ("pending_shipment", 1)
+        assert _address(order) == NEW_ADDRESS
+        assert await _count(session, AuditLog, AuditLog.tenant_id == TENANT_A) == 1
+        assert await _count(session, IdempotencyKey, IdempotencyKey.tenant_id == TENANT_A) == 1
+
+
+@pytest.mark.asyncio
+async def test_concurrent_retry_with_changed_body_raises_conflict(seeded_db, monkeypatch):
+    """An overlapped retry with a different body conflicts, without corruption."""
+
+    async with SessionLocal() as winner:
+        first = await change_address(
+            winner,
+            TENANT_A,
+            ORDER_O1002,
+            NEW_ADDRESS,
+            "change-race-conflict",
+            dry_run=False,
+            actor_id=OPERATOR_ID,
+            task_id=None,
+        )
+
+    _skip_first_replay(monkeypatch)
+
+    async with SessionLocal() as loser:
+        with pytest.raises(IdempotencyConflict):
+            await change_address(
+                loser,
+                TENANT_A,
+                ORDER_O1002,
+                {**NEW_ADDRESS, "phone": "13700137000"},
+                "change-race-conflict",
+                dry_run=False,
+                actor_id=OPERATOR_ID,
+                task_id=None,
+            )
+
+    async with SessionLocal() as session:
+        order = await _order(session, ORDER_O1002)
+        assert (order.status, order.version) == ("pending_shipment", 1)
+        assert _address(order) == first["after"]
         assert await _count(session, AuditLog, AuditLog.tenant_id == TENANT_A) == 1
         assert await _count(session, IdempotencyKey, IdempotencyKey.tenant_id == TENANT_A) == 1
 
