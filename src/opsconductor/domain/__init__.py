@@ -1,3 +1,13 @@
+"""Domain layer: ORM base, models, enums, address rules, and repositories.
+
+The package re-exports the declarative base, every ORM model, and the demo
+seeder so callers can import from ``opsconductor.domain`` directly.
+
+Note:
+    Every business table is tenant-scoped. Queries must filter on
+    ``tenant_id``; an ID alone is never proof that the caller may access a row.
+"""
+
 from opsconductor.domain.base import Base
 from opsconductor.domain.models import (
     Approval,
