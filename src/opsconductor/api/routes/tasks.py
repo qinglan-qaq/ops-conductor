@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from opsconductor.api.deps import Identity, get_identity
 from opsconductor.config import Settings, get_settings
 from opsconductor.db import get_session
-from opsconductor.domain.enums import RiskLevel
 from opsconductor.domain.models import Approval, TaskRun
 from opsconductor.llm.gateway import HttpChatModel
 from opsconductor.orchestrator.idempotency import (
@@ -28,6 +27,7 @@ from opsconductor.orchestrator.planner import (
     PlanGenerationError,
     TemplatePlanner,
 )
+from opsconductor.orchestrator.policy import RiskPolicy
 from opsconductor.schemas import Plan, TaskCreate, TaskRead, validate_plan
 
 TASK_TYPE = "order_exception"
@@ -65,28 +65,6 @@ async def _generate_plan(session: AsyncSession, task: PlannerTask) -> Plan:
         except PlanGenerationError:
             return await TemplatePlanner(session).plan(task)
     return await planner.plan(task)
-
-
-def _apply_risks(plan: Plan, settings: Settings) -> None:
-    """Derive risk level and approval needs that planners do not set themselves."""
-
-    split_nodes = [node for node in plan.nodes if node.action == "split_order"]
-    split_risk = (
-        RiskLevel.L3
-        if len(split_nodes) >= settings.l3_batch_threshold
-        else RiskLevel.L2
-    )
-    for node in plan.nodes:
-        if node.action == "split_order":
-            node.risk = split_risk
-            node.requires_approval = True
-        elif node.action == "change_address":
-            node.risk = RiskLevel.L2
-            node.requires_approval = True
-        else:
-            node.risk = RiskLevel.L0
-            node.requires_approval = False
-    plan.requires_l3 = any(node.risk == RiskLevel.L3 for node in plan.nodes)
 
 
 def _build_approvals(
@@ -152,7 +130,7 @@ async def create_task(
     )
     plan = await _generate_plan(session, planner_task)
     validate_plan(plan)
-    _apply_risks(plan, settings)
+    RiskPolicy(settings).apply(plan)
 
     plan_payload = plan.model_dump(mode="json")
     plan_payload["request"] = {

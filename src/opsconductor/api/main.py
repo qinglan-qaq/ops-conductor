@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 
 from opsconductor import __version__
+from opsconductor.api.routes.approvals import router as approvals_router
 from opsconductor.api.routes.tasks import router as tasks_router
 from opsconductor.config import get_settings
 
@@ -13,6 +14,7 @@ app = FastAPI(
 )
 
 app.include_router(tasks_router)
+app.include_router(approvals_router)
 
 
 @app.get("/health", tags=["system"])
