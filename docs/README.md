@@ -19,6 +19,7 @@
 | [实施计划](plan.md) | 6 周排期、交付物、投递节奏与风险管理 | 进行中 |
 | [MVP 实施计划](plans/2026-11-04-mvp-order-exception-implementation.md) | 订单异常 3 周任务级 TDD 计划 | 待执行 |
 | [JD 对齐实施计划](plans/2026-11-04-jd-alignment-implementation.md) | ERP Adapter、SKILL、Memory、RAG、RPA、多模型任务级计划 | 待执行 |
+| [项目代码审查](reviews/2026-11-04-project-code-review.md) | 两轴审查、结构图、P0/P1/P2 建议与已知缺口 | 已完成 |
 | [数据来源与合规](data-sources.md) | 数据集、许可、灌数策略 | 部分许可待核实 |
 | [ADR 0001](adr/0001-record-architecture-decisions.md) | 使用 ADR 记录架构决策 | 已接受 |
 | [ADR 0002](adr/0002-plan-execute-deterministic-runtime.md) | LLM 规划 + 确定性运行时执行 | 已接受 |
@@ -37,3 +38,4 @@
 - 2026-11-04：将原规格重组为「系统设计 / 实施计划 / 数据来源」三份文档，并新增本索引与 ADR 索引。
 - 2026-11-04：MVP 需求收敛为订单异常 + 拆单/改址的 3 周可写闭环，新增 [MVP 设计规格](specs/2026-11-04-mvp-order-exception-design.md)。
 - 2026-11-04：新增 [JD 对齐设计方案](specs/2026-11-04-jd-alignment-design.md)，在 MVP 后补 ERP Adapter、SKILL、Memory、RAG、RPA 和多模型，总周期约 6 周。
+- 2026-11-04：新增 [项目代码审查](reviews/2026-11-04-project-code-review.md)，记录两轴审查、结构热点与 P0/P1/P2 建议。
