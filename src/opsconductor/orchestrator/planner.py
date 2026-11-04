@@ -1,4 +1,20 @@
-"""Plan generation: deterministic template planner and validated LLM planner."""
+"""计划生成：确定性模板规划器与经过校验的 LLM 规划器。
+
+两个规划器都把同一条任务指令转换为相同的 :class:`Plan` 契约。
+:class:`TemplatePlanner` 是固定兜底方案：它按硬编码规则（拦截、改址或拆分）为
+每个逾期订单派生一个节点。:class:`LLMPlanner` 要求聊天模型输出 JSON，然后对答案
+施加同样的校验，并额外允许一次修复。
+
+Invariants:
+
+- 每个返回的计划都通过 :func:`opsconductor.schemas.validate_plan`，在计划可执行
+  前同时校验 Pydantic schema 与节点 DAG。
+- 计划只基于为任务租户加载的订单构建；引用其他订单、仓库或 SKU 的 LLM 计划会被
+  拒绝。
+- LLM 只有一次修复机会；第二次输出仍无效会抛出 :class:`PlanGenerationError`，
+  而不是执行任何操作。
+- 规划是只读的：只查询仓储，从不写入。
+"""
 
 import json
 from dataclasses import dataclass
@@ -16,11 +32,21 @@ from opsconductor.schemas import Plan, PlanNode, validate_plan
 
 
 class PlanGenerationError(RuntimeError):
-    """Raised when a model cannot produce a valid plan after one repair."""
+    """模型在一次修复后仍无法产出有效计划时抛出。"""
 
 
 @dataclass
 class _OrderContext:
+    """用于决定计划节点的单个逾期订单快照。
+
+    Attributes:
+        order: 正在为其规划的订单。
+        lines: 带请求数量的订单明细。
+        shipments: 已有发货单；任何一项都表示订单已拆分，必须拦截。
+        available: 订单所在仓库中每个 SKU 的可用库存；没有库存行的 SKU 不出现，
+            按零处理。
+    """
+
     order: SalesOrder
     lines: list[OrderLine]
     shipments: list[Shipment]
@@ -38,6 +64,19 @@ _READ_TOOLS = [
 
 
 def _task_cutoff(task: Any) -> datetime | None:
+    """解析任务截止时间，把空白字符串视为未设置。
+
+    Args:
+        task: 携带可选 ``cutoff`` 值的规划任务。
+
+    Returns:
+        解析后的 datetime；截止时间缺失或为空白时返回 ``None``；已是 datetime
+        时原样返回。
+
+    Raises:
+        ValueError: 字符串形式的截止时间无法按 ISO-8601 解析。
+    """
+
     cutoff = getattr(task, "cutoff", None)
     if isinstance(cutoff, str):
         if not cutoff.strip():
@@ -47,6 +86,18 @@ def _task_cutoff(task: Any) -> datetime | None:
 
 
 async def _load_order_contexts(session: AsyncSession, task: Any) -> list[_OrderContext]:
+    """为任务中的每个逾期订单加载租户限定上下文。
+
+    Args:
+        session: 用于只读仓储查询的会话。
+        task: 暴露 ``tenant_id`` 以及可选 ``warehouse``、``cutoff`` 过滤条件
+            的规划任务。
+
+    Returns:
+        每个逾期订单一个上下文，包含其明细、发货单以及订单所在仓库中逐 SKU 的
+        可用库存。
+    """
+
     tenant_id = task.tenant_id
     orders = await repositories.list_overdue_orders(
         session,
@@ -91,6 +142,20 @@ def _block_node(order: SalesOrder, reason: str, evidence: dict[str, Any]) -> Pla
 
 
 def _node_for_context(context: _OrderContext) -> PlanNode:
+    """为单个订单构建固定模板节点。
+
+    规则按顺序匹配，首个命中即生效：存在发货单的订单以 ``already_split`` 拦截；
+    没有仓库、没有明细或库存不足的订单按对应原因拦截；地址无效则生成
+    ``change_address`` 节点；其余情况生成 ``split_order`` 节点，每条订单明细对应
+    一个发货单。
+
+    Args:
+        context: 为任务加载的订单快照。
+
+    Returns:
+        该订单的拦截、改址或拆分节点。
+    """
+
     order = context.order
     if context.shipments:
         return _block_node(
@@ -146,6 +211,8 @@ def _node_for_context(context: _OrderContext) -> PlanNode:
 
 
 def _summary(nodes: list[PlanNode]) -> str:
+    """返回带各动作计数的本地化单行摘要。"""
+
     if not nodes:
         return "没有符合条件的待处理订单。"
     counts = {"split_order": 0, "change_address": 0, "block_order": 0}
@@ -227,7 +294,19 @@ def _repair_prompt(task: Any, previous: Any, error: Exception) -> str:
 
 
 def _validate_plan_against_contexts(plan: Plan, contexts: list[_OrderContext]) -> None:
-    """Reject plans that reference orders or params outside the loaded context."""
+    """拒绝引用已加载上下文之外订单或参数的计划。
+
+    仅 schema 与 DAG 有效还不够：模型仍可能编造订单 ID、引用其他租户的订单或传入
+    执行器不应接受的参数。该校验有意从严，因此计划只能作用于任务已加载的订单。
+
+    Args:
+        plan: 模型返回的 schema 有效计划。
+        contexts: 提供给模型的租户限定订单快照。
+
+    Raises:
+        ValueError: 节点引用未知订单、拆分节点使用其他仓库/SKU 或非正数量，或
+            改址节点缺少非空地址。
+    """
 
     contexts_by_order = {context.order.id: context for context in contexts}
     for node in plan.nodes:
@@ -246,6 +325,17 @@ def _validate_plan_against_contexts(plan: Plan, contexts: list[_OrderContext]) -
 def _validate_split_node(
     node: PlanNode, contexts_by_order: dict[UUID, _OrderContext]
 ) -> None:
+    """检查拆分节点是否停留在其订单的仓库与 SKU 范围内。
+
+    Args:
+        node: 待校验的 ``split_order`` 节点。
+        contexts_by_order: 计划可引用的全部订单快照。
+
+    Raises:
+        ValueError: 节点缺少订单、订单没有仓库、发货单列表为空、发货单指向其他
+            仓库、明细引用订单之外的 SKU，或数量不是正整数。
+    """
+
     if node.order_id is None:
         raise ValueError(f"split_order node {node.node_id} requires an order_id")
     context = contexts_by_order[node.order_id]
@@ -290,6 +380,21 @@ def _validate_split_node(
 
 
 def _parse_plan(raw: Any, task_id: str, contexts: list[_OrderContext]) -> Plan:
+    """将模型原始输出转换为绑定该任务的有效计划。
+
+    Args:
+        raw: 解码后的模型输出；必须是 JSON 对象。
+        task_id: 写入计划的 task ID，覆盖模型输出。
+        contexts: 计划可引用的订单快照。
+
+    Returns:
+        通过 schema、DAG 与订单上下文校验的计划。
+
+    Raises:
+        ValueError: 输出不是对象、未通过 ``Plan`` 校验、未通过 DAG 校验，或
+            引用了未提供的上下文。
+    """
+
     if not isinstance(raw, dict):
         raise ValueError("model output must be a JSON object")
     payload = dict(raw)
@@ -301,12 +406,29 @@ def _parse_plan(raw: Any, task_id: str, contexts: list[_OrderContext]) -> Plan:
 
 
 class TemplatePlanner:
-    """Deterministic fallback planner for order-exception tasks."""
+    """面向订单异常任务的确定性兜底规划器。
+
+    对每个逾期订单应用 :func:`_node_for_context` 中的固定规则，因此相同的数据库
+    状态总是产出相同的计划。不调用模型，也不写入任何内容。
+    """
 
     def __init__(self, session: AsyncSession):
         self.session = session
 
     async def plan(self, task: Any) -> Plan:
+        """为任务构建并校验模板计划。
+
+        Args:
+            task: 带 ``id``、``tenant_id`` 以及可选仓库与截止时间过滤的规划
+                任务。
+
+        Returns:
+            每个逾期订单一个节点的有效计划。
+
+        Raises:
+            ValueError: 生成的计划未通过 schema 或 DAG 校验。
+        """
+
         contexts = await _load_order_contexts(self.session, task)
         nodes = [_node_for_context(context) for context in contexts]
         plan = Plan(task_id=str(task.id), summary=_summary(nodes), nodes=nodes)
@@ -315,13 +437,31 @@ class TemplatePlanner:
 
 
 class LLMPlanner:
-    """LLM planner that validates output and retries once with a repair prompt."""
+    """校验模型输出并在失败时用修复提示重试一次的 LLM 规划器。
+
+    模型在系统提示中收到只读订单上下文，并且必须回复单个 JSON 对象。首次回答会
+    按 ``Plan`` schema、DAG 规则与已加载订单上下文校验；失败时携带校验错误发起
+    一次修复请求，再次失败则抛出 :class:`PlanGenerationError`。
+    """
 
     def __init__(self, model: ChatModel, session: AsyncSession):
         self.model = model
         self.session = session
 
     async def plan(self, task: Any) -> Plan:
+        """生成有效计划，最多允许一次修复尝试。
+
+        Args:
+            task: 带 ``id``、``tenant_id``、指令以及可选仓库与截止时间过滤的
+                规划任务。
+
+        Returns:
+            通过 schema、DAG 与订单上下文校验的计划。
+
+        Raises:
+            PlanGenerationError: 修复尝试后模型输出仍然无效。
+        """
+
         contexts = await _load_order_contexts(self.session, task)
         system = _system_prompt(contexts)
         raw: Any = None

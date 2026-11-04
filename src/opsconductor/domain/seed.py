@@ -1,3 +1,18 @@
+"""用于本地开发与测试的确定性演示数据。
+
+种子脚本插入两个租户（A 与 B）、各自的用户与店铺、十个带库存的 SKU、租户 A 的
+六个订单以及租户 B 的一个订单。所有固定 ID 都由稳定名称经 ``uuid5`` 推导，因此
+重复运行会命中相同的行，测试也可以按 ID 引用夹具。
+
+Invariants:
+
+- 播种幂等：仅当行不存在时才插入，因此第二次运行不会复制或覆盖夹具数据。
+- 租户 B 的订单 ``O2001`` 是刻意保留的，用于支撑租户隔离测试；它绝不能被租户 A
+  看到。
+- ``SKU-003`` 初始可用库存为零且 ``O1003`` 请求该 SKU，因此夹具覆盖缺货处理。
+- ``O1005`` 预先拆分并带一个发货单，用于覆盖状态校验。
+"""
+
 import uuid
 from datetime import UTC, datetime
 
@@ -31,6 +46,18 @@ SKU_IDS = {
 
 
 async def seed(session: AsyncSession) -> None:
+    """插入演示用的租户、用户、商品目录、库存与订单。
+
+    缺失的行会被创建，已存在的行保持原样，因此可以安全地在已有数据的库上重复
+    运行。函数在返回前提交自己的事务；没有可回滚的外层事务。
+
+    Args:
+        session: 用于查找、插入与最终提交的异步会话。
+
+    Returns:
+        ``None``。所有行都已提交到数据库。
+    """
+
     for tenant_id, name in [(TENANT_A, "tenant-a"), (TENANT_B, "tenant-b")]:
         if not await session.scalar(select(Tenant).where(Tenant.id == tenant_id)):
             session.add(Tenant(id=tenant_id, name=name))
