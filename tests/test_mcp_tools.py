@@ -1,9 +1,11 @@
 import uuid
+from contextlib import asynccontextmanager
 
 import pytest
 
 from opsconductor.db import SessionLocal
 from opsconductor.domain.seed import SKU_IDS, TENANT_A, TENANT_B, WAREHOUSE_EAST
+from opsconductor.tools import client as client_module
 from opsconductor.tools.client import ErpToolClient
 from opsconductor.tools.service import ErpToolService, address_is_valid
 
@@ -111,6 +113,45 @@ def test_address_is_valid_rules():
     order.district = "浦东新区"
     order.address_detail = "   "
     assert address_is_valid(order) is False
+
+
+@pytest.mark.asyncio
+async def test_erp_tool_client_closes_transport_when_initialize_fails(monkeypatch):
+    transport_closed = False
+    session_closed = False
+
+    @asynccontextmanager
+    async def fake_stdio_client(params):
+        nonlocal transport_closed
+        try:
+            yield object(), object()
+        finally:
+            transport_closed = True
+
+    class FailingSession:
+        def __init__(self, read, write):
+            self.read = read
+            self.write = write
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc_info):
+            nonlocal session_closed
+            session_closed = True
+
+        async def initialize(self):
+            raise RuntimeError("initialize failed")
+
+    monkeypatch.setattr(client_module, "stdio_client", fake_stdio_client)
+    monkeypatch.setattr(client_module, "ClientSession", FailingSession)
+
+    with pytest.raises(RuntimeError, match="initialize failed"):
+        async with ErpToolClient():
+            pass
+
+    assert session_closed is True
+    assert transport_closed is True
 
 
 @pytest.mark.integration

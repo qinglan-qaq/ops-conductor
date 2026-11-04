@@ -23,9 +23,13 @@ class ErpToolClient:
             args=["-m", "opsconductor.tools.server"],
             env=dict(os.environ),
         )
-        read, write = await self._stack.enter_async_context(stdio_client(params))
-        self._session = await self._stack.enter_async_context(ClientSession(read, write))
-        await self._session.initialize()
+        try:
+            read, write = await self._stack.enter_async_context(stdio_client(params))
+            self._session = await self._stack.enter_async_context(ClientSession(read, write))
+            await self._session.initialize()
+        except BaseException:
+            await self._stack.aclose()
+            raise
         return self
 
     async def __aexit__(self, *exc_info: object) -> None:
