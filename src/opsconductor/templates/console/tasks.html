@@ -1,0 +1,35 @@
+{% extends "console/base.html" %}
+{% block title %}任务列表 - OpsConductor 控制台{% endblock %}
+{% block content %}
+<h1>任务列表</h1>
+<section>
+  {% if rows %}
+  <table>
+    <thead>
+      <tr>
+        <th>指令</th>
+        <th>状态</th>
+        <th>计划摘要</th>
+        <th>涉及订单</th>
+        <th>创建时间</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>{{ row.task.instruction }}</td>
+        <td><span class="status status-{{ row.task.status }}">{{ row.task.status }}</span></td>
+        <td>{{ row.summary }}</td>
+        <td>{{ row.order_nos | join(", ") if row.order_nos else "-" }}</td>
+        <td class="muted">{{ row.task.created_at }}</td>
+        <td><a href="/console/tasks/{{ row.task.id }}{{ auth_query }}">查看详情</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">暂无任务。请通过 <code>POST /api/v1/tasks</code> 创建任务。</p>
+  {% endif %}
+</section>
+{% endblock %}
