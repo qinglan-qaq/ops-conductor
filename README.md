@@ -7,7 +7,7 @@
 
 运筹（OpsConductor）是一个面向电商 SaaS ERP 的多 Agent 运营系统。它把「处理今天华东仓超时未发货的订单」这类模糊指令，翻译成可拆解、可审批、可回滚、可审计的 ERP 操作。
 
-项目当前处于**骨架阶段**：HTTP 服务、配置、依赖与 CI 已就绪，业务逻辑尚未实现。
+项目当前处于**骨架阶段**：HTTP 服务、配置、依赖、conda 开发环境与 CI 已就绪，业务逻辑尚未实现。当前 MVP 聚焦订单异常场景的拆单与改址可写闭环，详见 [MVP 设计规格](docs/specs/2026-11-04-mvp-order-exception-design.md)；MVP 后进入 3 周 JD 对齐阶段，补齐 ERP Adapter、SKILL、Memory、RAG、RPA 与多模型，详见 [JD 对齐设计方案](docs/specs/2026-11-04-jd-alignment-design.md)。
 
 ## 核心场景
 
@@ -66,7 +66,7 @@ flowchart TB
 - 写操作按风险分级审批，幂等、补偿、审计三件套齐全。
 - API 优先，浏览器自动化只作为无 API 旧系统的兜底。
 
-完整设计见 [设计规格](docs/specs/2026-11-03-ecommerce-erp-multi-agent-design.md)。
+完整设计见 [系统设计](docs/design.md)。
 
 ## 技术栈
 
@@ -79,27 +79,26 @@ flowchart TB
 
 ## 快速开始
 
-环境要求：Python 3.11+、Docker。
+环境要求：Anaconda / Miniconda、Docker。
 
 ```bash
 # 1. 启动依赖（PostgreSQL + Redis）
 docker compose up -d
 
-# 2. 创建虚拟环境（Windows Git Bash）
-python -m venv .venv
-source .venv/Scripts/activate
+# 2. 创建并激活 conda 环境（含项目与开发依赖）
+conda env create -f environment.yml
+conda activate opsconductor
 
-# 3. 安装
-pip install -e ".[dev]"
-
-# 4. 启动服务
+# 3. 启动服务
 uvicorn opsconductor.api.main:app --reload
 ```
 
-PowerShell 激活虚拟环境：
+也可以手动创建环境：
 
-```powershell
-.venv\Scripts\Activate.ps1
+```bash
+conda create -n opsconductor python=3.11 -y
+conda activate opsconductor
+pip install -e ".[dev]"
 ```
 
 验证：
@@ -144,7 +143,23 @@ src/opsconductor/
 
 ## 文档
 
-- [设计规格](docs/specs/2026-11-03-ecommerce-erp-multi-agent-design.md)
+- [总规格 SPEC.md](SPEC.md) — 平台目标、端到端链路、六平面架构、归因/持久化/Skill/SOP/飞轮、验收与开放问题（审查稿）
+- [文档索引](docs/README.md)
+- [系统设计](docs/design.md)
+- [MVP 设计规格](docs/specs/2026-11-04-mvp-order-exception-design.md)
+- [JD 对齐设计方案](docs/specs/2026-11-04-jd-alignment-design.md)
+- [跨境电商全流程需求分析与能力地图（草案）](docs/specs/2026-11-10-cross-border-ecommerce-platform-design.md)
+- [跨境电商全流程模拟演示系统 · 需求规格](docs/specs/2026-11-10-cross-border-simulation-design.md)
+- [跨境电商全流程模拟演示系统 · 实施计划](docs/plans/2026-11-10-cross-border-simulation-implementation.md)
+- [电商运营 Agent 统筹架构](docs/specs/2026-11-11-agent-orchestration-design.md)
+- [Agent 归因、持久化、Skill/SOP 与数据飞轮设计](docs/specs/2026-11-11-agent-attribution-persistence-flywheel-design.md)
+- [电商运营 Orchestrator Skill](docs/skills/ecommerce-operations-orchestrator/SKILL.md)
+- [跨境运营 SOP](docs/sop/2026-11-11-cross-border-operations-sop.md)
+- [跨境电商运营异常处理指南](docs/operations/2026-11-10-cross-border-ecommerce-operations-exception-guide.md)
+- [MVP 实施计划](docs/plans/2026-11-04-mvp-order-exception-implementation.md)
+- [JD 对齐实施计划](docs/plans/2026-11-04-jd-alignment-implementation.md)
+- [实施计划](docs/plan.md)
+- [数据来源与合规](docs/data-sources.md)
 - [ADR 0001：记录架构决策](docs/adr/0001-record-architecture-decisions.md)
 - [ADR 0002：LLM 规划 + 确定性执行](docs/adr/0002-plan-execute-deterministic-runtime.md)
 - [ADR 0003：独立验证 Agent](docs/adr/0003-independent-verifier.md)
