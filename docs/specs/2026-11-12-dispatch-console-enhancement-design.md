@@ -2,7 +2,7 @@
 
 > 把「单页长滚动」升级为「场景目录 + 今日态势 + 阶段工作台」，前端迁移到 Vue 3 + TypeScript，并为电商平台控制接口与数据获取接口预留端口、canonical model、Adapter Registry 与防腐层。
 
-**版本** v1.2 ｜ **日期** 2026-11-12 ｜ **状态** 设计已确认，待实现 ｜ **关联文档**：[系统设计](../design.md) ｜ [跨境电商能力地图](2026-11-10-cross-border-ecommerce-platform-design.md) ｜ [模拟演示系统需求规格](2026-11-10-cross-border-simulation-design.md) ｜ [Agent 统筹架构](2026-11-11-agent-orchestration-design.md) ｜ [运营异常处理指南](../operations/2026-11-10-cross-border-ecommerce-operations-exception-guide.md) ｜ [现有调度台页面](../../design/cross-border-dispatch/index.html)
+**版本** v1.2 ｜ **日期** 2026-11-12 ｜ **状态** 已实现 ｜ **关联文档**：[系统设计](../design.md) ｜ [跨境电商能力地图](2026-11-10-cross-border-ecommerce-platform-design.md) ｜ [模拟演示系统需求规格](2026-11-10-cross-border-simulation-design.md) ｜ [Agent 统筹架构](2026-11-11-agent-orchestration-design.md) ｜ [运营异常处理指南](../operations/2026-11-10-cross-border-ecommerce-operations-exception-guide.md) ｜ [现有调度台页面](../../design/cross-border-dispatch/index.html)
 
 ---
 

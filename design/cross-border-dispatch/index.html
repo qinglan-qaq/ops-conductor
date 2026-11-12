@@ -1325,9 +1325,9 @@
     if(playBtn){ playBtn.disabled = false; playBtn.textContent = '重播演示'; }
     if(report){
       (report.events || []).forEach(event => addTrace(event.title, event.detail, event.at));
-      toast(report.summary, 'ink');
+      toast(report.summary + ' · 只读投影，审批状态未改变', 'ink');
     } else {
-      toast('演示完成 · 3 次审批 / 1 次拒绝 / 1 次补偿', 'ink');
+      toast('演示完成 · 只读投影 / 1 次补偿 / 审批状态未改变', 'ink');
     }
     demoRunning = false;
     await sleep(1500);
