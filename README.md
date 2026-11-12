@@ -217,6 +217,7 @@ src/opsconductor/
 
 - [总规格 SPEC.md](SPEC.md) — 平台目标、端到端链路、六平面架构、归因/持久化/Skill/SOP/飞轮、验收与开放问题（审查稿）
 - [文档索引](docs/README.md)
+- [跨境电商台前调度 Demo](design/cross-border-dispatch/README.md) — 朱墨批阅台页面 + 可运行 FastAPI 后端
 - [系统设计](docs/design.md)
 - [MVP 设计规格](docs/specs/2026-11-04-mvp-order-exception-design.md)
 - [3 分钟演示脚本](docs/demo-script.md)
