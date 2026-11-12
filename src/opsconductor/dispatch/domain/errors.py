@@ -27,3 +27,23 @@ class ApprovalAlreadyDecided(DispatchError):
 
 class ExceptionNotFound(DispatchError):
     """异常用例 ID 不存在时抛出。"""
+
+
+class StageNotFound(DispatchError):
+    """请求的阶段 ID 不在阶段目录中。"""
+
+
+class AdapterNotFound(DispatchError):
+    """指定平台/店铺没有注册 Adapter。"""
+
+
+class CapabilityNotSupported(DispatchError):
+    """Adapter 未声明请求的 data/control 能力。"""
+
+
+class ApprovalRequired(DispatchError):
+    """L2/L3 控制写缺少已批准的 approval_id。"""
+
+
+class IdempotencyConflict(DispatchError):
+    """同一幂等键被用于不同的控制命令。"""

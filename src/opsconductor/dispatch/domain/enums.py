@@ -78,3 +78,85 @@ class Decision(str, Enum):  # noqa: UP042
 
     approve = "approve"
     reject = "reject"
+
+
+class ArtifactKind(str, Enum):  # noqa: UP042
+    """阶段产物的展示类型。
+
+    前端用该枚举选择书签标签；枚举值直接进入 API 契约，新增类型必须同步
+    更新前端 ``ArtifactChip`` 映射。
+    """
+
+    json = "json"
+    csv = "csv"
+    markdown = "markdown"
+    image = "image"
+    video = "video"
+    pdf = "pdf"
+    other = "other"
+
+
+class ControlStatus(str, Enum):  # noqa: UP042
+    """平台控制命令的生命周期。"""
+
+    accepted = "accepted"
+    rejected = "rejected"
+    succeeded = "succeeded"
+    failed = "failed"
+    compensated = "compensated"
+
+
+class SyncStatus(str, Enum):  # noqa: UP042
+    """一次数据同步的生命周期。"""
+
+    running = "running"
+    succeeded = "succeeded"
+    partial = "partial"
+    failed = "failed"
+
+
+class IntegrationStatus(str, Enum):  # noqa: UP042
+    """平台集成连接状态。"""
+
+    connected = "connected"
+    mock = "mock"
+    degraded = "degraded"
+    disconnected = "disconnected"
+
+
+class IntegrationMode(str, Enum):  # noqa: UP042
+    """平台运行模式；``mock`` 不得产生真实外部副作用。"""
+
+    mock = "mock"
+    live = "live"
+
+
+class Freshness(str, Enum):  # noqa: UP042
+    """数据新鲜度；``unknown`` 表示缺乏同步证据。"""
+
+    fresh = "fresh"
+    stale = "stale"
+    unknown = "unknown"
+
+
+class IntegrationCapability(str, Enum):  # noqa: UP042
+    """跨平台数据与控制能力名。
+
+    页面和 Agent 只依据能力名做门禁，不依据平台名写分支。值必须与 spec
+    §6.7.2 及 Adapter manifest 保持逐字一致。
+    """
+
+    data_orders = "data.orders"
+    data_inventory = "data.inventory"
+    data_listings = "data.listings"
+    data_settlements = "data.settlements"
+    data_ads = "data.ads"
+    data_logistics = "data.logistics"
+    data_trends = "data.trends"
+    control_purchase = "control.purchase"
+    control_listing = "control.listing"
+    control_price = "control.price"
+    control_inventory = "control.inventory"
+    control_shipment = "control.shipment"
+    control_refund = "control.refund"
+    control_ads = "control.ads"
