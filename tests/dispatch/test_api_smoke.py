@@ -2,6 +2,8 @@
 
 import json
 
+from opsconductor.dispatch.adapters import page as page_module
+
 SNAPSHOT = "/api/v1/dispatch/snapshot"
 DECIDE_BUDGET = "/api/v1/dispatch/approvals/budget/decision"
 
@@ -201,6 +203,43 @@ def test_dispatch_page_is_served(client):
 
     assert response.status_code == 200
     assert "运筹跨境" in response.text
+    assert '<div id="app">' in response.text
+
+
+def test_spa_fallback_serves_vue_index(client):
+    response = client.get("/dispatch/stages/order")
+
+    assert response.status_code == 200
+    assert '<div id="app">' in response.text
+
+
+def test_vue_assets_are_served(client):
+    assets = sorted((page_module.DIST / "assets").glob("*.js"))
+
+    assert assets, "frontend/dist is missing; run bash scripts/build_frontend.sh"
+    response = client.get(f"/assets/{assets[0].name}")
+
+    assert response.status_code == 200
+    assert "javascript" in response.headers["content-type"]
+
+
+def test_legacy_ui_can_be_forced_by_env(client, monkeypatch):
+    monkeypatch.setenv("OPSCONDUCTOR_DISPATCH_UI", "legacy")
+
+    response = client.get("/dispatch")
+
+    assert response.status_code == 200
+    assert "播放调度演示" in response.text
+    assert '<div id="app">' not in response.text
+
+
+def test_missing_dist_returns_503_with_build_hint(client, monkeypatch, tmp_path):
+    monkeypatch.setattr(page_module, "DIST_INDEX", tmp_path / "missing.html")
+
+    response = client.get("/dispatch")
+
+    assert response.status_code == 503
+    assert "bash scripts/build_frontend.sh" in response.text
 
 
 def test_root_redirects_to_dispatch_page(client):
