@@ -82,7 +82,10 @@ def test_every_stage_has_four_or_five_steps():
 def test_stage_results_cover_every_operational_stage():
     assert set(STAGE_RESULTS) == {stage.id for stage in STAGE_CATALOG}
     assert all(result.agent_id for result in STAGE_RESULTS.values())
-    assert all(result.provenance.adapter == "MockPlatformAdapter" for result in STAGE_RESULTS.values())
+    assert all(
+        result.provenance.adapter == "MockPlatformAdapter"
+        for result in STAGE_RESULTS.values()
+    )
 
 
 def test_order_stage_result_uses_script_numbers():
