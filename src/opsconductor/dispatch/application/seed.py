@@ -15,6 +15,7 @@ from opsconductor.dispatch.application.agents import (
     APPROVAL_REFUND,
 )
 from opsconductor.dispatch.application.plans import build_plan
+from opsconductor.dispatch.application.stages import STAGE_RESULTS
 from opsconductor.dispatch.domain.enums import AgentStatus, StageStatus
 from opsconductor.dispatch.domain.models import (
     AgentCard,
@@ -26,6 +27,7 @@ from opsconductor.dispatch.domain.models import (
     Goal,
     Playbook,
     PlaybookPhase,
+    StageResult,
     TraceEvent,
 )
 from opsconductor.dispatch.domain.policies import PriorityPolicy
@@ -34,6 +36,15 @@ SEED_GOAL = Goal(
     id="goal-demo",
     instruction="本周做到 $100k GMV，广告预算 $10k；优先处理断货与超时订单。",
 )
+
+_EXCEPTION_STAGES: dict[str, str] = {
+    "ORD-01": "order",
+    "ORD-03": "order",
+    "ORD-04": "order",
+    "INV-01": "fulfillment",
+    "LOG-03": "logistics",
+    "PAY-02": "settlement",
+}
 
 _SEED_AGENT_STATES: dict[str, tuple[AgentStatus, str]] = {
     "selection": (AgentStatus.done, "扫描 8–12 周趋势，输出 5 个 Hero SKU。"),
@@ -57,6 +68,7 @@ def _approval_case(draft: ApprovalDraft) -> ApprovalCase:
         owner=draft.owner,
         impact=draft.impact,
         recommended=draft.recommended,
+        stage_id=draft.stage_id,
     )
 
 
@@ -130,6 +142,7 @@ def _exception(
         owner=owner,
         count=count,
         playbook=playbook,
+        stage_id=_EXCEPTION_STAGES.get(exception_id, ""),
     )
 
 
@@ -364,6 +377,11 @@ def build_exceptions() -> tuple[ExceptionCase, ...]:
     )
 
 
+def build_results() -> dict[str, StageResult]:
+    """返回阶段结果的浅拷贝；值对象本身不可变，字典用于按阶段定位。"""
+    return dict(STAGE_RESULTS)
+
+
 def build_seed_state(agent_cards: Mapping[str, AgentCard]) -> DispatchState:
     """组装调度台初始状态。
 
@@ -386,6 +404,7 @@ def build_seed_state(agent_cards: Mapping[str, AgentCard]) -> DispatchState:
         agents=cards,
         chain=build_chain(),
         trace=build_trace(),
+        results=build_results(),
     )
 
 
@@ -394,6 +413,7 @@ __all__ = [
     "build_approvals",
     "build_chain",
     "build_exceptions",
+    "build_results",
     "build_seed_state",
     "build_trace",
 ]
