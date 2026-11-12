@@ -1,0 +1,1689 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>运筹跨境 · 台前调度</title>
+<style>
+  :root{
+    --paper:#f7f3e9;
+    --paper-2:#fbf8f0;
+    --paper-3:#efe8d8;
+    --ink:#17130f;
+    --ink-2:#2b251d;
+    --ink-3:#5c5245;
+    --muted:#6e6455;
+    --red:#a8342a;
+    --red-2:#c14a3a;
+    --indigo:#2c4a56;
+    --indigo-2:#3f6673;
+    --gold:#a8894f;
+    --gold-ink:#7a5c2a;
+    --line:rgba(23,19,15,.16);
+    --line-strong:rgba(23,19,15,.4);
+    --line-soft:rgba(23,19,15,.09);
+    --song:"Noto Serif SC","Source Han Serif SC","STSong","SimSun",serif;
+    --fang:"STFangsong","FangSong","FangSong_GB2312","Noto Serif SC",serif;
+    --kai:"STKaiti","KaiTi","Kaiti SC",serif;
+    --mono:"JetBrains Mono","Cascadia Mono",Consolas,monospace;
+    --shadow:0 18px 40px rgba(23,19,15,.07);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    color:var(--ink);
+    font-family:var(--fang);
+    font-size:15px;
+    line-height:1.65;
+    background:
+      radial-gradient(1100px 480px at 12% -8%,rgba(168,137,79,.10),transparent 62%),
+      linear-gradient(rgba(23,19,15,.035) 1px,transparent 1px) 0 0/100% 32px,
+      var(--paper);
+    -webkit-font-smoothing:antialiased;
+  }
+  body::before{
+    content:"";
+    position:fixed;inset:0;pointer-events:none;z-index:9999;opacity:.032;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.6'/%3E%3C/svg%3E");
+  }
+  body::after{
+    content:"";
+    position:fixed;left:22px;top:0;bottom:0;width:1px;z-index:0;pointer-events:none;
+    background:rgba(168,52,42,.2);
+  }
+  ::selection{background:rgba(168,52,42,.18)}
+  [hidden]{display:none!important}
+  a{color:inherit;text-decoration:none}
+  button,input{font:inherit}
+  button{cursor:pointer}
+  :focus-visible{outline:2px solid var(--indigo);outline-offset:3px}
+  [id]{scroll-margin-top:96px}
+
+  .page{position:relative;z-index:1;max-width:1440px;margin:0 auto;padding:0 40px 48px}
+
+  /* ---------- top bar ---------- */
+  .topbar{
+    position:sticky;top:0;z-index:50;
+    background:rgba(247,243,233,.92);
+    backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--line-strong);
+    transition:box-shadow .25s;
+  }
+  .topbar.scrolled{box-shadow:0 10px 28px rgba(23,19,15,.07)}
+  .topbar-inner{
+    max-width:1440px;margin:0 auto;padding:0 40px;height:78px;
+    display:flex;align-items:center;gap:28px;
+  }
+  .brand{display:flex;align-items:center;gap:12px;flex:0 0 auto}
+  .brand-seal{
+    width:42px;height:42px;border:1.5px solid var(--red);color:var(--red);
+    display:grid;place-items:center;font-family:var(--song);font-size:21px;line-height:1;
+    position:relative;transform:rotate(-1.5deg);background:rgba(168,52,42,.03);
+  }
+  .brand-seal::after{content:"";position:absolute;inset:4px;border:1px solid currentColor;opacity:.4}
+  .brand-text b{display:block;font-family:var(--song);font-weight:600;font-size:19px;letter-spacing:.08em;line-height:1.2}
+  .brand-text small{display:block;font-family:var(--kai);font-size:12px;color:var(--muted);letter-spacing:.1em;margin-top:3px}
+  .nav{display:flex;align-items:center;gap:22px;margin-left:12px;overflow-x:auto;scrollbar-width:none}
+  .nav::-webkit-scrollbar{display:none}
+  .nav a{position:relative;display:inline-flex;align-items:center;min-height:44px;font-size:14px;color:var(--ink-3);padding:0;white-space:nowrap;transition:color .2s}
+  .nav a::after{content:"";position:absolute;left:0;right:100%;bottom:0;height:1.5px;background:var(--red);transition:right .25s}
+  .nav a:hover,.nav a.active{color:var(--ink)}
+  .nav a.active::after,.nav a:hover::after{right:0}
+  .top-meta{display:flex;align-items:center;gap:16px;margin-left:auto;flex:0 0 auto;font-size:12px;color:var(--muted)}
+  .mock-status{display:inline-flex;align-items:center;gap:6px;color:var(--indigo);font-family:var(--mono);font-size:12px;letter-spacing:.04em}
+  .mock-status i{width:7px;height:7px;border-radius:50%;background:var(--indigo);box-shadow:0 0 0 4px rgba(44,74,86,.1);animation:pulse 2.4s infinite}
+  .api-status{display:inline-flex;align-items:center;gap:6px;font-family:var(--kai);font-size:12px;color:var(--gold-ink);white-space:nowrap;letter-spacing:.04em}
+  .api-status::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 4px rgba(168,137,79,.12)}
+  .api-status.online{color:var(--indigo)}
+  .api-status.online::before{background:var(--indigo);box-shadow:0 0 0 4px rgba(44,74,86,.1);animation:pulse 2.4s infinite}
+  .api-status.offline{color:var(--red)}
+  .api-status.offline::before{background:var(--red);box-shadow:0 0 0 4px rgba(168,52,42,.1)}
+  .clock{font-family:var(--mono);font-size:12px;color:var(--ink-2);letter-spacing:.04em}
+  .duty{font-family:var(--kai);color:var(--ink-3)}
+  .seal.mini{width:28px;height:28px;font-size:13px;border-width:1px;color:var(--red);transform:rotate(2deg)}
+  .seal.mini::after{inset:3px}
+
+  /* ---------- hero ---------- */
+  .hero{
+    display:grid;grid-template-columns:minmax(0,1.52fr) minmax(360px,.88fr);
+    gap:42px;padding:44px 0 28px;border-bottom:1px solid var(--line);
+  }
+  .eyebrow{display:flex;align-items:center;gap:12px;font-family:var(--kai);font-size:12.5px;letter-spacing:.14em;color:var(--red)}
+  .eyebrow::before{content:"";width:32px;height:1px;background:var(--red)}
+  .hero h1{margin:14px 0 10px;font-family:var(--song);font-weight:600;font-size:46px;line-height:1.16;letter-spacing:.04em}
+  .hero-lead{max-width:640px;margin:0 0 22px;color:var(--ink-3);font-size:16px;line-height:1.8}
+  .command{
+    display:flex;align-items:stretch;border:1px solid var(--line-strong);
+    background:var(--paper-2);box-shadow:var(--shadow);position:relative;
+  }
+  .command::before{content:"";position:absolute;inset:4px;border:1px solid var(--line-soft);pointer-events:none}
+  .command-seal{
+    flex:0 0 54px;display:grid;place-items:center;font-family:var(--kai);font-size:22px;
+    color:var(--red);border-right:1px solid var(--line);background:rgba(168,52,42,.04);
+  }
+  .command input{
+    flex:1;min-width:0;border:0;background:transparent;padding:0 16px;
+    font-family:var(--fang);font-size:14.5px;color:var(--ink);min-height:56px;outline:none;
+  }
+  .command input::placeholder{color:var(--muted)}
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:7px;
+    border:1px solid transparent;background:transparent;color:var(--ink);
+    transition:background .2s,border-color .2s,color .2s,transform .12s,opacity .2s;
+    white-space:nowrap;
+  }
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{
+    background:var(--ink);color:var(--paper);border-color:var(--ink);
+    padding:0 20px;min-height:56px;font-family:var(--song);font-size:14px;letter-spacing:.06em;
+  }
+  .btn.primary:hover{background:var(--red);border-color:var(--red)}
+  .btn.primary:disabled{opacity:.65;cursor:default}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line-strong);min-height:44px;padding:0 12px;font-size:12.5px}
+  .btn.ghost:hover{border-color:var(--ink);background:rgba(23,19,15,.04)}
+  .btn.ghost:disabled{opacity:.55;cursor:default}
+  .btn.small{min-height:44px;font-size:12.5px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .chip{display:inline-flex;align-items:center;min-height:28px;padding:0 10px;border:1px solid var(--line);font-size:12px;color:var(--ink-3);background:rgba(255,255,255,.35)}
+  .chip.ghost{border-style:dashed;color:var(--muted)}
+
+  .kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-self:end}
+  .kpi{
+    position:relative;border:1px solid var(--line-strong);background:rgba(255,255,255,.36);
+    padding:16px 16px 14px;min-height:142px;display:flex;flex-direction:column;
+    transition:transform .2s,border-color .2s,box-shadow .2s;
+  }
+  .kpi::before{content:"";position:absolute;left:0;top:0;width:3px;height:34px;background:var(--ink)}
+  .kpi.alert::before{background:var(--red)}
+  .kpi:hover{transform:translateY(-2px);border-color:rgba(23,19,15,.6);box-shadow:0 12px 24px rgba(23,19,15,.08)}
+  .kpi-head{display:flex;justify-content:space-between;gap:8px;font-family:var(--kai);font-size:12px;color:var(--muted);letter-spacing:.04em}
+  .kpi-index{color:var(--red);font-size:12px}
+  .kpi-value{margin:6px 0 2px;font-family:var(--song);font-weight:600;font-size:34px;line-height:1.1;letter-spacing:.02em}
+  .kpi-value small{font-family:var(--fang);font-size:12px;color:var(--muted);font-weight:400;margin-left:4px}
+  .kpi-foot{margin-top:auto;display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--ink-3)}
+  .dots{display:flex;gap:4px;margin-top:10px}
+  .dots i{width:7px;height:7px;border:1px solid var(--line-strong);background:transparent}
+  .dots i.on{background:var(--indigo);border-color:var(--indigo)}
+  .dots i.red{background:var(--red);border-color:var(--red)}
+
+  /* ---------- flow rail ---------- */
+  .flow-rail{margin:24px 0 0;border:1px solid var(--line-strong);background:rgba(255,255,255,.3);position:relative;min-width:0}
+  .flow-rail::before{content:"";position:absolute;inset:4px;border:1px solid var(--line-soft);pointer-events:none}
+  .flow-head{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;padding:16px 20px 12px;border-bottom:1px solid var(--line)}
+  .section-no{font-family:var(--kai);font-size:12px;color:var(--red);letter-spacing:.18em}
+  .flow-head h2{margin:3px 0 0;font-family:var(--song);font-size:18px;font-weight:600;letter-spacing:.06em}
+  .flow-actions{display:flex;align-items:center;gap:14px}
+  .flow-note{font-family:var(--kai);font-size:12.5px;color:var(--ink-3)}
+  .steps{
+    list-style:none;margin:0;padding:16px 20px 18px;
+    display:grid;grid-template-columns:repeat(6,1fr);gap:0;min-width:0;
+  }
+  .step{position:relative;padding-right:18px;min-width:0}
+  .step:last-child{padding-right:0}
+  .step::after{content:"";position:absolute;left:0;right:0;top:17px;height:1px;background:var(--line);z-index:0}
+  .step:first-child::after{left:17px}
+  .step:last-child::after{right:calc(100% - 17px)}
+  .step-btn{position:relative;z-index:1;display:flex;gap:10px;align-items:flex-start;background:transparent;border:0;padding:0;text-align:left;width:100%;color:var(--ink)}
+  .step-no{
+    flex:0 0 34px;height:34px;border:1px solid var(--line-strong);background:var(--paper);
+    display:grid;place-items:center;font-family:var(--kai);font-size:15px;color:var(--ink-3);
+    transition:background .2s,border-color .2s,color .2s,box-shadow .2s;
+  }
+  .step.done .step-no{background:var(--indigo);border-color:var(--indigo);color:var(--paper)}
+  .step.active .step-no{background:var(--red);border-color:var(--red);color:var(--paper);box-shadow:0 0 0 4px rgba(168,52,42,.1)}
+  .step.focus .step-no{outline:2px solid var(--indigo);outline-offset:3px}
+  .step b{display:block;font-family:var(--song);font-size:14px;font-weight:600;letter-spacing:.04em;margin-top:2px}
+  .step small{display:block;font-family:var(--fang);font-size:12px;line-height:1.45;color:var(--muted);margin-top:2px}
+  .step.active b{color:var(--red)}
+  .step.waiting{opacity:.7}
+  .step.waiting .step-no{border-style:dashed}
+
+  /* ---------- workspace ---------- */
+  .workspace{display:grid;grid-template-columns:minmax(0,1.62fr) minmax(340px,.88fr);gap:22px;margin-top:22px;align-items:start}
+  .col-main,.col-side{display:flex;flex-direction:column;gap:22px;min-width:0}
+  .panel{border:1px solid var(--line-strong);background:rgba(255,255,255,.34);position:relative;min-width:0}
+  .panel::before{content:"";position:absolute;inset:4px;border:1px solid var(--line-soft);pointer-events:none}
+  .focus-ring{outline:2px solid rgba(168,52,42,.35);outline-offset:4px}
+  .panel-head{position:relative;display:flex;justify-content:space-between;align-items:flex-end;gap:14px;padding:17px 20px 13px;border-bottom:1px solid var(--line)}
+  .panel-kicker{display:block;font-family:var(--kai);font-size:12px;letter-spacing:.18em;color:var(--red)}
+  .panel-head h2{margin:3px 0 0;font-family:var(--song);font-size:20px;font-weight:600;letter-spacing:.06em;line-height:1.2}
+  .panel-meta{font-family:var(--kai);font-size:12px;color:var(--muted);text-align:right;line-height:1.6}
+  .count-seal{
+    position:relative;flex:0 0 auto;width:34px;height:34px;border:1.5px solid var(--red);
+    color:var(--red);display:grid;place-items:center;font-family:var(--song);font-size:16px;
+    transform:rotate(2deg);background:rgba(168,52,42,.04);
+  }
+  .count-seal::after{content:"";position:absolute;inset:3px;border:1px solid currentColor;opacity:.3}
+
+  /* chain */
+  .tower{display:flex;align-items:center;gap:18px;padding:10px 20px;border-bottom:1px solid var(--line);background:rgba(44,74,86,.04);font-size:12px;color:var(--ink-3);flex-wrap:wrap;position:relative;z-index:1}
+  .tower-label{display:inline-flex;align-items:center;gap:7px;font-family:var(--kai);color:var(--indigo);letter-spacing:.12em}
+  .tower-label i{width:6px;height:6px;border-radius:50%;background:var(--indigo);animation:pulse 2.4s infinite}
+  .tower b{font-family:var(--mono);font-weight:500;color:var(--ink)}
+  .tower .sep{width:1px;height:12px;background:var(--line)}
+  .chain-scroll{overflow-x:auto;padding:18px 20px 10px;scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent;min-width:0}
+  .chain-scroll::-webkit-scrollbar{height:6px}
+  .chain-scroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:0}
+  .chain-legend{display:flex;gap:14px;flex-wrap:wrap;padding:0 20px 10px;font-family:var(--kai);font-size:12px;color:var(--muted)}
+  .chain-legend span{display:inline-flex;align-items:center;gap:5px}
+  .chain-legend i{width:7px;height:7px;border:1px solid var(--line-strong)}
+  .chain-legend i.done{background:var(--indigo);border-color:var(--indigo)}
+  .chain-legend i.running{background:var(--paper);border-color:var(--indigo);box-shadow:0 0 0 2px rgba(44,74,86,.14)}
+  .chain-legend i.alert{background:var(--red);border-color:var(--red)}
+  .chain-legend i.waiting{border-style:dashed}
+  .chain-hint{display:none;padding:0 16px 10px;font-family:var(--kai);font-size:12px;color:var(--muted);letter-spacing:.04em}
+  .chain-hint::before{content:"";display:inline-block;width:18px;height:1px;background:var(--red);vertical-align:middle;margin-right:8px}
+  .chain-track{display:flex;align-items:stretch;min-width:940px;position:relative}
+  .chain-track::before{content:"";position:absolute;left:14px;right:14px;top:23px;height:1px;background:var(--line);z-index:0}
+  .stage{
+    position:relative;z-index:1;flex:1;min-width:88px;background:transparent;border:0;
+    padding:0 6px;text-align:center;color:var(--ink);display:flex;flex-direction:column;
+    align-items:center;gap:7px;
+  }
+  .stage-dot{width:13px;height:13px;border:1.5px solid var(--line-strong);background:var(--paper);margin-top:17px;transition:transform .2s,box-shadow .2s,background .2s,border-color .2s}
+  .stage.done .stage-dot{background:var(--indigo);border-color:var(--indigo)}
+  .stage.running .stage-dot{background:var(--paper);border-color:var(--indigo);box-shadow:0 0 0 4px rgba(44,74,86,.1);animation:pulse 2.2s infinite}
+  .stage.alert .stage-dot{background:var(--red);border-color:var(--red);box-shadow:0 0 0 4px rgba(168,52,42,.1)}
+  .stage.waiting .stage-dot{border-style:dashed}
+  .stage-name{font-family:var(--song);font-size:13px;font-weight:600;letter-spacing:.02em;white-space:nowrap}
+  .stage-meta{font-family:var(--kai);font-size:12px;color:var(--muted);white-space:nowrap}
+  .stage:hover .stage-dot{transform:scale(1.25)}
+  .stage.active .stage-name{color:var(--red)}
+  .stage.active .stage-dot{box-shadow:0 0 0 4px rgba(168,52,42,.14)}
+  .stage-detail{margin:0 20px 20px;border-top:1px solid var(--line);padding-top:16px;position:relative}
+  .stage-detail.is-swapping{animation:swapIn .28s ease both}
+  .detail-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+  .detail-kicker{font-family:var(--kai);font-size:12px;color:var(--red);letter-spacing:.12em}
+  .detail-head h3{margin:3px 0 0;font-family:var(--song);font-size:24px;font-weight:600;letter-spacing:.04em}
+  .risk{display:inline-flex;align-items:center;justify-content:center;min-width:32px;height:22px;padding:0 6px;font-family:var(--mono);font-size:12px;border:1px solid currentColor;margin-left:8px;vertical-align:3px}
+  .risk.l1{color:var(--indigo)}
+  .risk.l2{color:var(--gold-ink)}
+  .risk.l3{color:var(--red)}
+  .risk.p0{color:var(--paper);background:var(--red);border-color:var(--red)}
+  .risk.p1{color:var(--red);background:rgba(168,52,42,.06)}
+  .detail-owner{font-family:var(--kai);font-size:12px;color:var(--muted);text-align:right;line-height:1.6;flex:0 0 auto}
+  .detail-owner span{display:block;font-size:12px;color:var(--red);letter-spacing:.12em}
+  .detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:16px}
+  .detail-label{display:block;font-family:var(--kai);font-size:12px;color:var(--ink-3);letter-spacing:.1em;margin-bottom:4px}
+  .detail-grid p{margin:0;font-size:13.5px;line-height:1.7;color:var(--ink-2)}
+  .detail-foot{display:flex;justify-content:space-between;gap:14px;margin-top:14px;padding-top:10px;border-top:1px dotted var(--line);font-family:var(--kai);font-size:12px;color:var(--muted)}
+  .detail-note{color:var(--indigo)}
+
+  /* agents */
+  .orch{display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--line);background:rgba(23,19,15,.025);position:relative;z-index:1}
+  .orch-mark{width:34px;height:34px;border:1px solid var(--ink);display:grid;place-items:center;font-family:var(--kai);font-size:15px;background:var(--ink);color:var(--paper)}
+  .orch b{font-family:var(--song);font-size:14px;font-weight:600;letter-spacing:.04em}
+  .orch small{display:block;font-family:var(--fang);font-size:12px;color:var(--muted)}
+  .orch-state{margin-left:auto;font-family:var(--kai);font-size:12px;color:var(--indigo);display:flex;align-items:center;gap:6px}
+  .orch-state i{width:6px;height:6px;border-radius:50%;background:var(--indigo);animation:pulse 2.4s infinite}
+  .agent-table{padding:0 20px 8px;position:relative;z-index:1}
+  .agent-head{display:grid;grid-template-columns:1.45fr 1.7fr .55fr .65fr;gap:12px;padding:9px 0 7px;border-bottom:1px solid var(--line);font-family:var(--kai);font-size:12px;color:var(--muted);letter-spacing:.08em}
+  .agent-row{display:grid;grid-template-columns:1.45fr 1.7fr .55fr .65fr;gap:12px;align-items:center;padding:11px 0;border-bottom:1px dotted var(--line);font-size:13px;transition:background .2s}
+  .agent-row:last-child{border-bottom:0}
+  .agent-row:hover{background:rgba(23,19,15,.025)}
+  .agent-cell{display:flex;align-items:center;gap:9px;min-width:0}
+  .agent-avatar{flex:0 0 30px;width:30px;height:30px;border:1px solid var(--line-strong);display:grid;place-items:center;font-family:var(--kai);font-size:13px;color:var(--red);background:rgba(255,255,255,.4)}
+  .agent-name b{display:block;font-family:var(--song);font-size:13.5px;font-weight:600;line-height:1.3;white-space:nowrap}
+  .agent-name small{display:block;font-family:var(--fang);font-size:12px;color:var(--muted);line-height:1.4;white-space:nowrap}
+  .agent-task{font-family:var(--fang);font-size:12.5px;color:var(--ink-2);line-height:1.5;min-width:0}
+  .agent-status{font-family:var(--kai);font-size:12px;color:var(--indigo);display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+  .agent-status::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor}
+  .agent-status.alert{color:var(--red)}
+  .agent-status.wait{color:var(--gold-ink)}
+  .agent-status.done{color:var(--muted)}
+  .agent-risk{text-align:right}
+  .agent-foot{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;padding:12px 20px;border-top:1px solid var(--line);font-family:var(--kai);font-size:12px;color:var(--muted);position:relative;z-index:1}
+  .agent-foot b{color:var(--ink-2);font-weight:500}
+
+  /* loops */
+  .loops{display:grid;grid-template-columns:repeat(4,1fr);gap:0;position:relative;z-index:1}
+  .loop{padding:16px 18px 18px;border-right:1px solid var(--line);min-width:0}
+  .loop:last-child{border-right:0}
+  .loop b{font-family:var(--song);font-size:14px;font-weight:600;letter-spacing:.04em}
+  .loop small{display:block;font-family:var(--kai);font-size:12px;color:var(--red);margin-top:2px}
+  .loop-flow{display:flex;flex-wrap:wrap;gap:5px 4px;margin-top:10px;font-family:var(--fang);font-size:12px;color:var(--ink-3)}
+  .loop-flow span{position:relative;padding-right:9px}
+  .loop-flow span::after{content:"·";position:absolute;right:0;color:var(--line-strong)}
+  .loop-flow span:last-child::after{display:none}
+  .loop-steps{display:flex;gap:4px;margin-top:12px}
+  .loop-steps i{height:2px;flex:1;background:var(--line)}
+  .loop-steps i.on{background:var(--red)}
+  .loop-status{margin-top:7px;font-family:var(--kai);font-size:12px;color:var(--indigo)}
+
+  /* approvals */
+  .approvals-panel::after{content:"批";position:absolute;right:18px;bottom:8px;font-family:var(--song);font-size:130px;line-height:1;color:rgba(168,52,42,.045);pointer-events:none}
+  .approval-list{position:relative;z-index:1;padding:2px 20px 18px}
+  .approval{position:relative;border-bottom:1px solid var(--line);padding:15px 0 14px;transition:background .2s}
+  .approval:last-child{border-bottom:0}
+  .approval:hover{background:rgba(23,19,15,.02)}
+  .approval-top{display:flex;align-items:center;gap:8px;font-family:var(--kai);font-size:12px;color:var(--muted)}
+  .approval-type{color:var(--ink-3)}
+  .approval-rec{margin-left:auto;color:var(--red);font-size:12px;border:1px solid rgba(168,52,42,.25);padding:0 5px;background:rgba(168,52,42,.04)}
+  .approval h3{margin:6px 0 3px;font-family:var(--song);font-size:15px;font-weight:600;line-height:1.4;letter-spacing:.02em}
+  .approval-meta{margin:0;font-size:12px;color:var(--ink-3)}
+  .approval-impact{margin:4px 0 0;font-size:12px;color:var(--muted)}
+  .approval-actions{display:flex;gap:8px;margin-top:10px}
+  .btn.approve,.btn.reject{min-height:44px;min-width:64px;font-family:var(--song);font-size:13px;letter-spacing:.2em;border:1px solid var(--line-strong);background:transparent;color:var(--ink)}
+  .btn.approve:hover{background:var(--indigo);border-color:var(--indigo);color:var(--paper)}
+  .btn.reject:hover{background:var(--red);border-color:var(--red);color:var(--paper)}
+  .btn.approve:disabled,.btn.reject:disabled{opacity:.35;cursor:default}
+  .approval.decided .approval-actions{display:none}
+  .approval-result{display:none;margin:7px 0 0;font-family:var(--kai);font-size:12px;color:var(--indigo)}
+  .approval.decided .approval-result{display:block}
+  .approval.rejected .approval-result{color:var(--red)}
+  .stamp{position:absolute;right:8px;bottom:10px;width:56px;height:56px;border:2px solid var(--red);color:var(--red);display:none;place-items:center;font-family:var(--song);font-size:23px;transform:rotate(-9deg);opacity:.9;letter-spacing:.1em;background:rgba(247,243,233,.65)}
+  .approval.decided .stamp{display:grid;animation:stampIn .35s ease both}
+  .approval.approved .stamp{color:var(--indigo);border-color:var(--indigo)}
+
+  /* exceptions */
+  .exceptions-panel::after{content:"案";position:absolute;right:16px;bottom:8px;font-family:var(--song);font-size:130px;line-height:1;color:rgba(23,19,15,.035);pointer-events:none}
+  .exception-list{position:relative;z-index:1;padding:0 20px 8px}
+  .exception{width:100%;display:flex;align-items:center;gap:10px;padding:11px 0;border:0;border-bottom:1px dotted var(--line);background:transparent;text-align:left;color:var(--ink);transition:background .2s}
+  .exception:last-child{border-bottom:0}
+  .exception:hover{background:rgba(168,52,42,.035)}
+  .p-badge{flex:0 0 30px;height:22px;display:grid;place-items:center;font-family:var(--mono);font-size:12px;border:1px solid var(--red);color:var(--red)}
+  .p-badge.p0{background:var(--red);color:var(--paper)}
+  .exception-main{flex:1;min-width:0}
+  .exception-main b{display:block;font-family:var(--song);font-size:13px;font-weight:600;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .exception-main small{display:block;font-family:var(--fang);font-size:12px;color:var(--muted);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .exception-meta{flex:0 0 auto;font-family:var(--kai);font-size:12px;color:var(--red);white-space:nowrap}
+  .chev{flex:0 0 auto;font-family:var(--song);font-size:18px;color:var(--muted)}
+  .exception-foot{padding:10px 20px 14px;border-top:1px solid var(--line);font-family:var(--kai);font-size:12px;color:var(--muted);position:relative;z-index:1}
+
+  /* trace */
+  .trace-list{list-style:none;margin:0;padding:12px 20px 16px;max-height:248px;overflow-y:auto;scrollbar-width:thin;position:relative;z-index:1}  .trace-list li{position:relative;display:flex;gap:12px;padding:0 0 14px 14px;border-left:1px solid var(--line);margin-left:3px;animation:rise .3s ease both}
+  .trace-list li:last-child{border-left-color:transparent;padding-bottom:0}
+  .trace-list li::before{content:"";position:absolute;left:-3.5px;top:4px;width:6px;height:6px;border-radius:50%;background:var(--indigo)}
+  .trace-list li:first-child::before{background:var(--red)}
+  .trace-list time{flex:0 0 42px;font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.5}
+  .trace-list b{display:block;font-family:var(--song);font-size:12.5px;font-weight:600;line-height:1.4}
+  .trace-list small{display:block;font-family:var(--fang);font-size:12px;color:var(--muted);line-height:1.45}
+
+  /* five step */
+  .five-panel{margin-top:22px}
+  .five-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:0;padding:0 20px 4px;position:relative;z-index:1}
+  .five{padding:18px 16px 16px;border-right:1px solid var(--line);position:relative;min-width:0}
+  .five:last-child{border-right:0}
+  .five-no{font-family:var(--kai);font-size:12px;color:var(--red);letter-spacing:.1em}
+  .five h3{margin:4px 0 6px;font-family:var(--song);font-size:16px;font-weight:600;letter-spacing:.02em}
+  .five h3 small{font-family:var(--kai);font-size:12px;color:var(--muted);font-weight:400;margin-left:4px}
+  .five p{margin:0;font-size:12.5px;line-height:1.7;color:var(--ink-3)}
+  .five-quote{margin:0 20px 18px;padding:12px 0 0;border-top:1px solid var(--line);font-family:var(--kai);font-size:13px;color:var(--red);letter-spacing:.04em;position:relative;z-index:1}
+
+  /* footer */
+  .footer{margin-top:30px;padding-top:20px;border-top:1px solid var(--line-strong);display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:24px;align-items:start}
+  .footer-brand{display:flex;align-items:center;gap:10px}
+  .footer-brand .brand-seal{width:34px;height:34px;font-size:17px}
+  .footer-brand b{display:block;font-family:var(--song);font-size:14px;font-weight:600;letter-spacing:.06em}
+  .footer-brand small{display:block;font-family:var(--kai);font-size:12px;color:var(--muted)}
+  .footer p{max-width:680px;margin:0;font-size:12px;line-height:1.8;color:var(--muted)}
+  .footer p a{color:var(--indigo);border-bottom:1px solid rgba(44,74,86,.25)}
+  .footer-stats{display:flex;gap:8px;flex-wrap:wrap}
+  .footer-stats span{font-family:var(--mono);font-size:12px;color:var(--ink-3);border:1px solid var(--line);padding:3px 7px}
+
+  /* drawer + toast */
+  .drawer-backdrop{position:fixed;inset:0;background:rgba(13,16,14,.45);z-index:80;opacity:0;transition:opacity .25s}
+  .drawer-backdrop.open{opacity:1}
+  .drawer{
+    position:fixed;top:0;right:0;bottom:0;width:min(460px,100%);z-index:90;
+    background:var(--paper);border-left:1px solid var(--line-strong);
+    box-shadow:-24px 0 60px rgba(0,0,0,.18);transform:translateX(102%);
+    transition:transform .3s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column;
+  }
+  .drawer.open{transform:translateX(0)}
+  .drawer-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:22px 24px 16px;border-bottom:1px solid var(--line-strong)}
+  .drawer-head h2{margin:4px 0 0;font-family:var(--song);font-size:24px;font-weight:600;letter-spacing:.04em;line-height:1.3}
+  .drawer-body{padding:20px 24px 32px;overflow-y:auto}
+  .drawer-meta{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}
+  .drawer-meta span{font-family:var(--mono);font-size:12px;border:1px solid var(--line);padding:3px 7px;color:var(--ink-3)}
+  .drawer-stamp{float:right;width:64px;height:64px;border:2px solid var(--red);color:var(--red);display:grid;place-items:center;font-family:var(--song);font-size:22px;transform:rotate(-8deg);margin:0 0 10px 14px;opacity:.85}
+  .drawer-section{margin-bottom:18px}
+  .drawer-section p{margin:0;font-size:13.5px;line-height:1.75;color:var(--ink-2)}
+  .drawer-timeline{display:flex;flex-direction:column;gap:14px;margin:18px 0}
+  .drawer-phase{border-left:2px solid var(--red);padding-left:14px}
+  .drawer-phase h4{margin:0 0 6px;font-family:var(--song);font-size:14px;font-weight:600}
+  .drawer-phase ul{margin:0;padding-left:18px;font-size:13px;line-height:1.7;color:var(--ink-2)}
+  .drawer-phase li{margin:2px 0}
+  .drawer-automation{background:rgba(44,74,86,.05);border:1px solid rgba(44,74,86,.16);padding:12px 14px;font-size:13px;line-height:1.7;color:var(--ink-2)}
+  .toast{
+    position:fixed;left:50%;bottom:28px;transform:translate(-50%,16px);z-index:120;
+    background:var(--ink);color:var(--paper);padding:11px 16px;font-size:13px;font-family:var(--fang);
+    opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;
+    max-width:min(560px,calc(100vw - 32px));border-left:3px solid var(--red);
+  }
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+  .toast.red{border-left-color:var(--red)}
+  .toast.ink{border-left-color:var(--indigo)}
+
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  @keyframes stampIn{from{opacity:0;transform:rotate(-9deg) scale(1.6)}to{opacity:.9;transform:rotate(-9deg) scale(1)}}
+  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  @keyframes swapIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+  .reveal{animation:rise .6s ease both}
+  .reveal.d1{animation-delay:.08s}
+  .reveal.d2{animation-delay:.16s}
+  .reveal.d3{animation-delay:.24s}
+
+  @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    *,*::before,*::after{animation:none!important;transition:none!important}
+  }
+
+  /* ---------- responsive ---------- */
+  @media (max-width:1180px){
+    .hero{grid-template-columns:1fr;gap:28px}
+    .kpi-grid{grid-template-columns:repeat(4,1fr)}
+    .workspace{grid-template-columns:1fr}
+    .col-side{display:grid;grid-template-columns:1fr 1fr;align-items:start}
+    .trace-panel{grid-column:1/-1}
+  }
+  @media (max-width:980px){
+    .topbar-inner{height:auto;padding:12px 24px;flex-wrap:wrap;gap:10px 18px}
+    .nav{order:3;width:100%;margin-left:0;gap:18px;padding-bottom:2px}
+    .top-meta{margin-left:auto}
+    .clock{display:none}
+    .page{padding:0 24px 36px}
+    .brand-text small{display:none}
+    .kpi-grid{grid-template-columns:1fr 1fr}
+    .col-side{grid-template-columns:1fr}
+    .footer{grid-template-columns:1fr}
+    .detail-grid{grid-template-columns:1fr 1fr}
+    .loops{grid-template-columns:1fr 1fr}
+    .loop:nth-child(2){border-right:0}
+    .loop:nth-child(1),.loop:nth-child(2){border-bottom:1px solid var(--line)}
+    .five-grid{grid-template-columns:1fr 1fr}
+    .five{border-right:0;border-bottom:1px solid var(--line)}
+    .five:nth-child(odd){border-right:1px solid var(--line)}
+    .five:last-child{grid-column:1/-1}
+  }
+  @media (max-width:640px){
+    body::after{display:none}
+    .page{padding:0 16px 28px}
+    .topbar-inner{padding:10px 16px}
+    .top-meta{gap:8px}
+    .duty,.mock-status{display:none}
+    .hero{padding:28px 0 22px}
+    .hero h1{font-size:28px;letter-spacing:.02em;line-height:1.25}
+    .hero-lead{font-size:14px}
+    .command{flex-wrap:wrap}
+    .command-seal{flex:0 0 44px;min-height:48px}
+    .command input{flex:1 1 auto;min-width:0;min-height:48px;font-size:14px;order:2;padding:0 12px}
+    .command .btn.primary{flex:1 1 100%;order:3;min-height:48px;border-top:1px solid var(--line)}
+    .kpi-grid{grid-template-columns:1fr 1fr;gap:8px}
+    .kpi{min-height:128px;padding:12px}
+    .kpi-value{font-size:27px}
+    .kpi-foot{font-size:11.5px}
+    .steps{display:flex;flex-direction:column;overflow:visible;padding:8px 16px 14px;gap:0}
+    .step{flex:none;width:100%;padding:10px 0;border-bottom:1px dotted var(--line)}
+    .step:last-child{border-bottom:0}
+    .step::after{display:none}
+    .step-btn{width:100%}
+    .step-no{flex:0 0 32px;height:32px}
+    .step small{font-size:12px}
+    .panel-meta{display:none}
+    .trace-list{max-height:none}
+    .detail-foot{flex-direction:column;gap:4px}
+    .chain-hint{display:block}
+    .flow-head{flex-direction:column;align-items:flex-start;padding:14px 16px 10px}
+    .flow-actions{width:100%;justify-content:space-between;flex-wrap:wrap;gap:8px}
+    .workspace{margin-top:16px}
+    .panel-head{padding:14px 16px 11px}
+    .panel-head h2{font-size:18px}
+    .chain-scroll{padding:14px 16px 8px}
+    .stage-detail{margin:0 16px 16px}
+    .detail-head{flex-direction:column}
+    .detail-owner{text-align:left}
+    .detail-grid{grid-template-columns:1fr}
+    .agent-table{padding:0 16px 6px}
+    .agent-head{display:none}
+    .agent-foot{grid-template-columns:1fr}
+    .agent-row{grid-template-columns:1fr auto;gap:6px 10px;padding:10px 0}
+    .agent-task{grid-column:1/-1;font-size:12px;color:var(--muted)}
+    .agent-risk{text-align:left}
+    .agent-status{justify-self:end}
+    .loops{grid-template-columns:1fr}
+    .loop{border-right:0;border-bottom:1px solid var(--line)}
+    .loop:last-child{border-bottom:0}
+    .five-grid{grid-template-columns:1fr}
+    .five{border-right:0;border-bottom:1px solid var(--line)}
+    .five:last-child{grid-column:auto}
+    .footer{flex-direction:column}
+    .drawer-head{padding:18px 18px 14px}
+    .drawer-body{padding:16px 18px 28px}
+  }
+</style>
+</head>
+<body>
+<header class="topbar" id="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#overview" aria-label="运筹跨境 · 台前调度">
+      <span class="brand-seal">运</span>
+      <span class="brand-text"><b>运筹跨境</b><small>台前调度 · 跨境运营控制面</small></span>
+    </a>
+    <nav class="nav" aria-label="页面导航">
+      <a class="active" href="#overview">总览</a>
+      <a href="#chain">十段链路</a>
+      <a href="#agents">Agent 调度</a>
+      <a href="#approvals">审批案</a>
+      <a href="#exceptions">异常簿</a>
+    </nav>
+    <div class="top-meta">
+      <span id="apiStatus" class="api-status">连接中</span>
+      <span class="mock-status"><i></i>Mock 演算</span>
+      <span class="clock" id="clock">10:42:00</span>
+      <span class="duty">值班 · 小运</span>
+      <span class="seal mini" aria-hidden="true">值</span>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+  <section class="hero reveal" id="overview">
+    <div class="hero-copy">
+      <div class="eyebrow">今日之令 · 2026-11-12 · 美区家居</div>
+      <h1>一句话，调度十条链路。</h1>
+      <p class="hero-lead">从选品到结算，计划、审批、执行、验证、归因都在同一张案台上。你只需要给出目标，剩下的交给 Agent 与批阅流。</p>
+      <form class="command" id="commandForm">
+        <span class="command-seal" aria-hidden="true">令</span>
+        <input id="goalInput" type="text" aria-label="运营目标" value="本周做到 $100k GMV，广告预算 $10k；优先处理断货与超时订单。">
+        <button class="btn primary" id="generateBtn" type="submit">生成调度计划</button>
+      </form>
+      <div class="chips">
+        <span class="chip">NestWell Home US</span>
+        <span class="chip">美区 · 家居</span>
+        <span class="chip">预算 $10k</span>
+        <span class="chip">ROAS 2.5</span>
+        <span class="chip ghost">Mock 剧本 · 固定种子</span>
+      </div>
+    </div>
+
+    <div class="kpi-grid" aria-label="今日关键指标">
+      <article class="kpi">
+        <div class="kpi-head"><span>本周 GMV 目标</span><span class="kpi-index">壹</span></div>
+        <div class="kpi-value" id="kpiGmv">$100k</div>
+        <div class="dots" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
+        <div class="kpi-foot"><span>5 个 Hero SKU</span><span>ROAS 2.5</span></div>
+      </article>
+      <article class="kpi alert">
+        <div class="kpi-head"><span>异常订单</span><span class="kpi-index">貳</span></div>
+        <div class="kpi-value" id="kpiExceptions">6 <small>单</small></div>
+        <div class="dots" aria-hidden="true"><i class="red"></i><i class="red"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
+        <div class="kpi-foot"><span>2 单 P0/P1</span><span>首响 ≤15 分钟</span></div>
+      </article>
+      <article class="kpi">
+        <div class="kpi-head"><span>待批事项</span><span class="kpi-index">叁</span></div>
+        <div class="kpi-value" id="kpiApprovals">3 <small>件</small></div>
+        <div class="dots" id="approvalDots" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i></div>
+        <div class="kpi-foot"><span>L2 ×1</span><span>L3 ×2</span></div>
+      </article>
+      <article class="kpi">
+        <div class="kpi-head"><span>补偿动作</span><span class="kpi-index">肆</span></div>
+        <div class="kpi-value" id="kpiCompensation">1 <small>次</small></div>
+        <div class="dots" aria-hidden="true"><i class="on"></i></div>
+        <div class="kpi-foot"><span>拆单库存冲突</span><span>待验证</span></div>
+      </article>
+    </div>
+  </section>
+
+  <section class="flow-rail reveal d1" aria-label="调度流程">
+    <div class="flow-head">
+      <div>
+        <span class="section-no">流程 · FLOW</span>
+        <h2>从目标到报告</h2>
+      </div>
+      <div class="flow-actions">
+        <span class="flow-note" id="flowNote">审批进行中 · 3 件待批</span>
+        <button class="btn ghost small" id="playDemo" type="button">播放调度演示</button>
+      </div>
+    </div>
+    <ol class="steps" id="flowSteps">
+      <li class="step done" data-step="1">
+        <button class="step-btn" type="button"><span class="step-no">一</span><span><b>目标接入</b><small>店铺 / 市场 / 预算已解析</small></span></button>
+      </li>
+      <li class="step done" data-step="2">
+        <button class="step-btn" type="button"><span class="step-no">二</span><span><b>计划生成</b><small>DAG / 风险 / 预算已标注</small></span></button>
+      </li>
+      <li class="step active" data-step="3">
+        <button class="step-btn" type="button"><span class="step-no">三</span><span><b>审批</b><small>3 件待批 · 1 件建议驳回</small></span></button>
+      </li>
+      <li class="step waiting" data-step="4">
+        <button class="step-btn" type="button"><span class="step-no">四</span><span><b>执行</b><small>8 个 Agent 待分派</small></span></button>
+      </li>
+      <li class="step waiting" data-step="5">
+        <button class="step-btn" type="button"><span class="step-no">五</span><span><b>验证</b><small>毛利 / 库存 / 预算 / 合规</small></span></button>
+      </li>
+      <li class="step waiting" data-step="6">
+        <button class="step-btn" type="button"><span class="step-no">六</span><span><b>报告</b><small>指标 / 证据 / trace</small></span></button>
+      </li>
+    </ol>
+  </section>
+
+  <section class="workspace">
+    <div class="col-main">
+      <section class="panel reveal d1" id="chain">
+        <div class="panel-head">
+          <div>
+            <span class="panel-kicker">十段链路 · VALUE CHAIN</span>
+            <h2>从选品到售后</h2>
+          </div>
+          <div class="panel-meta">控制塔横向覆盖<br>点击任意环节查看处置要点</div>
+        </div>
+        <div class="tower">
+          <span class="tower-label"><i></i>控制塔</span>
+          <span>指标 <b>GMV / 毛利 / 异常</b></span>
+          <span class="sep"></span>
+          <span>告警 <b>6 单</b></span>
+          <span class="sep"></span>
+          <span>审批 <b>3 件</b></span>
+          <span class="sep"></span>
+          <span>trace <b>100%</b></span>
+        </div>
+        <div class="chain-scroll">
+          <div class="chain-track" aria-label="十段链路">
+            <button class="stage done" type="button" data-stage="selection"><span class="stage-dot"></span><span class="stage-name">选品</span><span class="stage-meta">5 SKU</span></button>
+            <button class="stage running" type="button" data-stage="content"><span class="stage-dot"></span><span class="stage-name">内容</span><span class="stage-meta">5 SKU</span></button>
+            <button class="stage waiting" type="button" data-stage="listing"><span class="stage-dot"></span><span class="stage-name">上架</span><span class="stage-meta">待创建</span></button>
+            <button class="stage waiting" type="button" data-stage="organic"><span class="stage-dot"></span><span class="stage-name">自然流量</span><span class="stage-meta">内容日历</span></button>
+            <button class="stage waiting" type="button" data-stage="paid"><span class="stage-dot"></span><span class="stage-name">付费广告</span><span class="stage-meta">3 Campaign</span></button>
+            <button class="stage alert" type="button" data-stage="order"><span class="stage-dot"></span><span class="stage-name">订单</span><span class="stage-meta">6 单异常</span></button>
+            <button class="stage running" type="button" data-stage="fulfillment"><span class="stage-dot"></span><span class="stage-name">库存履约</span><span class="stage-meta">补偿 1</span></button>
+            <button class="stage alert" type="button" data-stage="logistics"><span class="stage-dot"></span><span class="stage-name">物流关务</span><span class="stage-meta">1 票扣关</span></button>
+            <button class="stage running" type="button" data-stage="settlement"><span class="stage-dot"></span><span class="stage-name">收款结算</span><span class="stage-meta">3 笔差异</span></button>
+            <button class="stage waiting" type="button" data-stage="aftersales"><span class="stage-dot"></span><span class="stage-name">售后合规</span><span class="stage-meta">政策 RAG</span></button>
+          </div>
+        </div>
+        <div class="chain-legend" aria-label="链路状态图例">
+          <span><i class="done"></i>已完成</span>
+          <span><i class="running"></i>进行中</span>
+          <span><i class="alert"></i>异常</span>
+          <span><i class="waiting"></i>待开始</span>
+        </div>
+        <div class="chain-hint">左右滑动查看十段链路 · 点击节点查看处置</div>
+        <div class="stage-detail" id="stageDetail"></div>
+      </section>
+
+      <section class="panel reveal d2" id="agents">
+        <div class="panel-head">
+          <div>
+            <span class="panel-kicker">Agent 调度 · DISPATCH</span>
+            <h2>八个领域 Agent</h2>
+          </div>
+          <div class="panel-meta">能力 / 可用性 / 成本 / 风险<br>由 Orchestrator 统一分派</div>
+        </div>
+        <div class="orch">
+          <span class="orch-mark">调</span>
+          <div><b>Orchestrator</b><small>目标解析 · 计划 DAG · 预算 · 升级</small></div>
+          <span class="orch-state"><i></i>计划已生成 · 等待审批</span>
+        </div>
+        <div class="agent-table">
+          <div class="agent-head"><span>Agent</span><span>当前任务</span><span>风险</span><span>状态</span></div>
+          <div class="agent-row" data-agent="selection">
+            <div class="agent-cell"><span class="agent-avatar">选</span><span class="agent-name"><b>选品 Agent</b><small>趋势 · 评分 · SKU 组合</small></span></div>
+            <div class="agent-task">扫描 8–12 周趋势，输出 5 个 Hero SKU。</div>
+            <div class="agent-risk"><span class="risk l1">L1</span></div>
+            <div><span class="agent-status done">已完成</span></div>
+          </div>
+          <div class="agent-row" data-agent="content">
+            <div class="agent-cell"><span class="agent-avatar">内</span><span class="agent-name"><b>内容 Agent</b><small>Brief · 图片 / 视频</small></span></div>
+            <div class="agent-task">5 个 SKU × 3 图 + 2 条短视频脚本。</div>
+            <div class="agent-risk"><span class="risk l2">L2</span></div>
+            <div><span class="agent-status">进行中</span></div>
+          </div>
+          <div class="agent-row" data-agent="pricing">
+            <div class="agent-cell"><span class="agent-avatar">价</span><span class="agent-name"><b>定价 Agent</b><small>竞品 · 匹配 · 弹性</small></span></div>
+            <div class="agent-task">1 条涨价建议待批，运营可驳回。</div>
+            <div class="agent-risk"><span class="risk l3">L3</span></div>
+            <div><span class="agent-status wait">待批</span></div>
+          </div>
+          <div class="agent-row" data-agent="ads">
+            <div class="agent-cell"><span class="agent-avatar">投</span><span class="agent-name"><b>投放 Agent</b><small>预算 · 出价 · ROAS</small></span></div>
+            <div class="agent-task">3 个 Campaign，总预算 $10,000。</div>
+            <div class="agent-risk"><span class="risk l3">L3</span></div>
+            <div><span class="agent-status wait">待批</span></div>
+          </div>
+          <div class="agent-row" data-agent="order">
+            <div class="agent-cell"><span class="agent-avatar">单</span><span class="agent-name"><b>订单 Agent</b><small>异常 · 拆单 · 改址</small></span></div>
+            <div class="agent-task">6 单异常，2 单 P0/P1，优先止损。</div>
+            <div class="agent-risk"><span class="risk l2">L2</span></div>
+            <div><span class="agent-status alert">处理中</span></div>
+          </div>
+          <div class="agent-row" data-agent="fulfillment">
+            <div class="agent-cell"><span class="agent-avatar">履</span><span class="agent-name"><b>履约 Agent</b><small>比价 · 发货 · 报关</small></span></div>
+            <div class="agent-task">1 票报关失败，触发拆单补偿。</div>
+            <div class="agent-risk"><span class="risk l2">L2</span></div>
+            <div><span class="agent-status alert">补偿中</span></div>
+          </div>
+          <div class="agent-row" data-agent="settlement">
+            <div class="agent-cell"><span class="agent-avatar">结</span><span class="agent-name"><b>结算 Agent</b><small>对账 · 退款 · 拒付</small></span></div>
+            <div class="agent-task">3 笔对账差异，生成财务任务。</div>
+            <div class="agent-risk"><span class="risk l3">L3</span></div>
+            <div><span class="agent-status">对账中</span></div>
+          </div>
+          <div class="agent-row" data-agent="compliance">
+            <div class="agent-cell"><span class="agent-avatar">合</span><span class="agent-name"><b>合规 Agent</b><small>政策 · IP · 产品安全</small></span></div>
+            <div class="agent-task">1 个 SKU 合规不达标，已剔除。</div>
+            <div class="agent-risk"><span class="risk l3">L3</span></div>
+            <div><span class="agent-status done">已完成</span></div>
+          </div>
+        </div>
+        <div class="agent-foot">
+          <span><b>Verifier</b> · 独立否决 · 毛利 / 库存 / 预算 / 合规 / 审计</span>
+          <span><b>Memory</b> · 失败 / 实验 / 效果</span>
+          <span><b>MCP</b> · 工具契约 · 租户 / 限流 / 审计</span>
+          <span><b>RPA</b> · 影刀桥接 · 截图 / 审计</span>
+        </div>
+      </section>
+
+      <section class="panel reveal d3">
+        <div class="panel-head">
+          <div>
+            <span class="panel-kicker">四闭环 · LOOPS</span>
+            <h2>内容 · 定价 · 履约 · 结算</h2>
+          </div>
+          <div class="panel-meta">跨环节状态一致<br>结果回到控制塔复盘</div>
+        </div>
+        <div class="loops">
+          <div class="loop">
+            <b>内容闭环</b><small>进行中</small>
+            <div class="loop-flow"><span>Brief</span><span>制图</span><span>合规</span><span>Listing</span><span>反馈</span></div>
+            <div class="loop-steps" aria-hidden="true"><i></i><i></i><i class="on"></i><i></i><i></i></div>
+            <div class="loop-status">当前 · 合规校验</div>
+          </div>
+          <div class="loop">
+            <b>定价闭环</b><small>待批 1</small>
+            <div class="loop-flow"><span>竞品</span><span>匹配</span><span>建议</span><span>护栏</span><span>审批</span><span>执行</span></div>
+            <div class="loop-steps" aria-hidden="true"><i></i><i></i><i></i><i></i><i class="on"></i><i></i></div>
+            <div class="loop-status">当前 · 审批护栏</div>
+          </div>
+          <div class="loop">
+            <b>履约闭环</b><small>补偿 1</small>
+            <div class="loop-flow"><span>订单</span><span>分类</span><span>拆单 / 改址</span><span>预占</span><span>物流 / 报关</span><span>补偿</span></div>
+            <div class="loop-steps" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i class="on"></i></div>
+            <div class="loop-status">当前 · 逆序补偿</div>
+          </div>
+          <div class="loop">
+            <b>结算闭环</b><small>差异 3</small>
+            <div class="loop-flow"><span>结算单</span><span>费用</span><span>对账</span><span>差异归因</span><span>财务任务</span></div>
+            <div class="loop-steps" aria-hidden="true"><i></i><i></i><i></i><i class="on"></i><i></i></div>
+            <div class="loop-status">当前 · 差异归因</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="col-side">
+      <section class="panel approvals-panel reveal d1" id="approvals">
+        <div class="panel-head">
+          <div>
+            <span class="panel-kicker">批 · 待办</span>
+            <h2>审批案</h2>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <button class="btn ghost small" id="resetApprovals" type="button">重置</button>
+            <span class="count-seal" id="approvalCount">3</span>
+          </div>
+        </div>
+        <div class="approval-list" id="approvalList">
+          <article class="approval" data-id="budget">
+            <div class="approval-top"><span class="risk l3">L3</span><span class="approval-type">预算</span><span class="approval-rec">剧本：准</span></div>
+            <h3>广告预算 · 3 个 Campaign</h3>
+            <p class="approval-meta">投放 Agent → 财务小财 · 总额 $10,000</p>
+            <p class="approval-impact">超过 L3 审批阈值 · 影响 3 个 Campaign</p>
+            <div class="approval-actions">
+              <button class="btn approve" type="button" data-id="budget" data-decision="approve">准</button>
+              <button class="btn reject" type="button" data-id="budget" data-decision="reject">驳</button>
+            </div>
+            <p class="approval-result" hidden></p>
+            <span class="stamp" aria-hidden="true"></span>
+          </article>
+          <article class="approval" data-id="price">
+            <div class="approval-top"><span class="risk l2">L2</span><span class="approval-type">改价</span><span class="approval-rec">剧本：驳</span></div>
+            <h3>涨价建议 · 1 个 SKU</h3>
+            <p class="approval-meta">定价 Agent → 运营小运 · 需二次确认</p>
+            <p class="approval-impact">影响 Listing 价格 · 剧本中运营驳回后改换 SKU</p>
+            <div class="approval-actions">
+              <button class="btn approve" type="button" data-id="price" data-decision="approve">准</button>
+              <button class="btn reject" type="button" data-id="price" data-decision="reject">驳</button>
+            </div>
+            <p class="approval-result" hidden></p>
+            <span class="stamp" aria-hidden="true"></span>
+          </article>
+          <article class="approval" data-id="refund">
+            <div class="approval-top"><span class="risk l3">L3</span><span class="approval-type">退款</span><span class="approval-rec">剧本：准</span></div>
+            <h3>退款 · 政策 RAG 已核验</h3>
+            <p class="approval-meta">结算 Agent → 财务小财 · 政策相符</p>
+            <p class="approval-impact">资金动作必须人工审批 · 写审计与补偿记录</p>
+            <div class="approval-actions">
+              <button class="btn approve" type="button" data-id="refund" data-decision="approve">准</button>
+              <button class="btn reject" type="button" data-id="refund" data-decision="reject">驳</button>
+            </div>
+            <p class="approval-result" hidden></p>
+            <span class="stamp" aria-hidden="true"></span>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel exceptions-panel reveal d2" id="exceptions">
+        <div class="panel-head">
+          <div>
+            <span class="panel-kicker">异常簿 · INCIDENTS</span>
+            <h2>今日异常</h2>
+          </div>
+          <span class="count-seal">6</span>
+        </div>
+        <div class="exception-list">
+          <button class="exception" type="button" data-exception="ORD-01">
+            <span class="p-badge p0">P0</span>
+            <span class="exception-main"><b>超时未发货</b><small>ORD-01 · L5 / I4 · 15 分钟响应</small></span>
+            <span class="exception-meta">2 单</span><span class="chev">›</span>
+          </button>
+          <button class="exception" type="button" data-exception="INV-01">
+            <span class="p-badge p1">P1</span>
+            <span class="exception-main"><b>库存不足 / 超卖</b><small>INV-01 · L4 / I4 · 30 分钟响应</small></span>
+            <span class="exception-meta">1 SKU</span><span class="chev">›</span>
+          </button>
+          <button class="exception" type="button" data-exception="ORD-03">
+            <span class="p-badge p1">P1</span>
+            <span class="exception-main"><b>地址异常 / 改址</b><small>ORD-03 · L4 / I3 · 30 分钟响应</small></span>
+            <span class="exception-meta">1 单</span><span class="chev">›</span>
+          </button>
+          <button class="exception" type="button" data-exception="LOG-03">
+            <span class="p-badge p1">P1</span>
+            <span class="exception-main"><b>海关扣关 / 查验</b><small>LOG-03 · L3 / I4 · 30 分钟响应</small></span>
+            <span class="exception-meta">1 票</span><span class="chev">›</span>
+          </button>
+          <button class="exception" type="button" data-exception="PAY-02">
+            <span class="p-badge p1">P1</span>
+            <span class="exception-main"><b>结算少结 / 多扣</b><small>PAY-02 · L4 / I3 · 30 分钟响应</small></span>
+            <span class="exception-meta">3 笔</span><span class="chev">›</span>
+          </button>
+          <button class="exception" type="button" data-exception="ORD-04">
+            <span class="p-badge p2">P2</span>
+            <span class="exception-main"><b>重复订单 / 重复扣款</b><small>ORD-04 · L3 / I3 · 30 分钟响应</small></span>
+            <span class="exception-meta">1 单</span><span class="chev">›</span>
+          </button>
+        </div>
+        <div class="exception-foot">按 5×5 风险矩阵定级 · 点击任一异常查看 playbook</div>
+      </section>
+
+      <section class="panel trace-panel reveal d3" id="trace">
+        <div class="panel-head">
+          <div>
+            <span class="panel-kicker">Trace · REPLAY</span>
+            <h2>回放</h2>
+          </div>
+          <button class="btn ghost small" id="playTrace" type="button">播放</button>
+        </div>
+        <ol class="trace-list" id="traceList">
+          <li><time>10:42</time><div><b>目标接入</b><small>结构化 intent · 店铺 / 市场 / 预算</small></div></li>
+          <li><time>10:43</time><div><b>计划生成</b><small>DAG · 风险 · 预算</small></div></li>
+          <li><time>10:45</time><div><b>审批</b><small>广告预算 L3 待批</small></div></li>
+          <li><time>11:02</time><div><b>执行</b><small>订单 Agent 处理 6 单异常</small></div></li>
+          <li><time>11:08</time><div><b>验证</b><small>Verifier 检查库存非负</small></div></li>
+          <li><time>11:12</time><div><b>归因</b><small>触点 / 动作 / 结果</small></div></li>
+          <li><time>11:15</time><div><b>报告</b><small>指标 / 证据 / trace</small></div></li>
+        </ol>
+      </section>
+    </aside>
+  </section>
+
+  <section class="panel five-panel reveal d2">
+    <div class="panel-head">
+      <div>
+        <span class="panel-kicker">异常五步法 · METHOD</span>
+        <h2>先止损，再找根因</h2>
+      </div>
+      <div class="panel-meta">P0/P1 48 小时内复盘<br>P2 7 天内 · P3 月度汇总</div>
+    </div>
+    <div class="five-grid">
+      <article class="five"><span class="five-no">一</span><h3>Detect <small>发现</small></h3><p>监控、告警、巡检、客诉、平台通知，尽早知道。</p></article>
+      <article class="five"><span class="five-no">二</span><h3>Diagnose <small>诊断</small></h3><p>影响面、时间线、证据、复现，搞清范围和原因。</p></article>
+      <article class="five"><span class="five-no">三</span><h3>Decide <small>定级</small></h3><p>L×I 评分、P0–P3、自动化或人工，决定投入与升级。</p></article>
+      <article class="five"><span class="five-no">四</span><h3>Deal <small>处置</small></h3><p>止损、恢复、补偿、沟通，先控制损失再修复。</p></article>
+      <article class="five"><span class="five-no">五</span><h3>Debrief <small>复盘</small></h3><p>无责复盘、5 Whys、CAPA，没有 CAPA 不算关闭。</p></article>
+    </div>
+    <p class="five-quote">先止损，再找根因；先定级，再动作；先证据，再结论。</p>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-brand">
+      <span class="brand-seal">运</span>
+      <div><b>运筹跨境 · 台前调度</b><small>Ops Conductor · Cross-border Dispatch</small></div>
+    </div>
+    <p>
+      依据：<a href="../../SPEC.md">SPEC §6 主链路 / §7 四闭环 / §9 Agent</a>；
+      <a href="../../docs/operations/2026-11-10-cross-border-ecommerce-operations-exception-guide.md">运营异常指南 §1 全景 / §4 定级 / §5 目录 / §6 playbook</a>；
+      <a href="../../docs/specs/2026-11-10-cross-border-simulation-design.md">模拟演示 §2 剧本 / §11 控制台</a>；
+      <a href="../../docs/specs/2026-11-11-agent-orchestration-design.md">Agent 统筹 §2</a>。<br>
+      数据为 Mock 演示 · 固定种子，不宣称真实经营数据。
+    </p>
+    <div class="footer-stats"><span>30 Golden Tasks</span><span>80 异常场景</span><span>18 Playbook</span><span>L0–L3 审批</span></div>
+  </footer>
+</main>
+
+<div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" hidden>
+  <div class="drawer-head">
+    <div><span class="panel-kicker" id="drawerKicker">异常详情</span><h2 id="drawerTitle">—</h2></div>
+    <button class="btn ghost small" id="drawerClose" type="button" aria-label="关闭异常详情">合</button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+</aside>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  'use strict';
+
+  const $ = (sel, root=document) => root.querySelector(sel);
+  const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+  /* ---------- dispatch API ---------- */
+  const DISPATCH_API = '/api/v1/dispatch';
+  const apiStatus = document.getElementById('apiStatus');
+  let apiOnline = location.protocol !== 'file:';
+
+  async function api(path, options={}){
+    const response = await fetch(DISPATCH_API + path, {
+      headers: {'Content-Type': 'application/json'},
+      ...options
+    });
+    if(!response.ok){
+      const detail = await response.json().catch(() => ({}));
+      throw new Error(detail.detail || ('HTTP ' + response.status));
+    }
+    return response.json();
+  }
+  function setApiStatus(text, online){
+    apiOnline = online;
+    if(!apiStatus) return;
+    apiStatus.textContent = text;
+    apiStatus.className = 'api-status ' + (online ? 'online' : 'offline');
+  }
+  async function loadSnapshot(){
+    if(!apiOnline){ setApiStatus('静态预览', false); return; }
+    try{
+      const snapshot = await api('/snapshot');
+      applySnapshot(snapshot);
+      setApiStatus('后端已连接', true);
+    }catch(error){
+      setApiStatus('静态预览', false);
+      toast('后端未连接，继续使用静态演示', 'red');
+    }
+  }
+
+  /* ---------- clock ---------- */
+  const clock = $('#clock');
+  function updateClock(){
+    if(!clock) return;
+    clock.textContent = new Date().toLocaleTimeString('zh-CN', {hour12:false});
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  /* ---------- topbar shadow ---------- */
+  const topbar = $('#topbar');
+  const onScroll = () => topbar.classList.toggle('scrolled', window.scrollY > 8);
+  window.addEventListener('scroll', onScroll, {passive:true});
+  onScroll();
+
+  /* ---------- nav active ---------- */
+  const navLinks = $$('.nav a');
+  const sections = ['overview','chain','agents','approvals','exceptions']
+    .map(id => document.getElementById(id))
+    .filter(Boolean);
+  if('IntersectionObserver' in window){
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if(!entry.isIntersecting) return;
+        const id = '#' + entry.target.id;
+        navLinks.forEach(link => link.classList.toggle('active', link.getAttribute('href') === id));
+      });
+    }, {rootMargin:'-22% 0px -68% 0px', threshold:0});
+    sections.forEach(section => observer.observe(section));
+  }
+
+  /* ---------- stage chain ---------- */
+  const stageData = {
+    selection: {
+      index:'第 1 段', name:'市场与选品', risk:'L1', owner:'运营 / 买手',
+      actions:'趋势采集、竞品分析、需求评分、合规/IP 筛查、SKU 组合。',
+      failures:'选错品、侵权、毛利为负、物流不可行。',
+      ai:'趋势聚类、评分卡、评论痛点抽取、合规初筛。',
+      metrics:'上新命中率 · 毛利 · 售罄率',
+      note:'5 个 Hero SKU 进入候选'
+    },
+    content: {
+      index:'第 2 段', name:'商品与内容', risk:'L2', owner:'内容 / 运营',
+      actions:'商品资料、卖点、图片、短视频、直播脚本、本地化。',
+      failures:'素材同质化、违规声明、版权问题。',
+      ai:'Brief 生成、变体生成、合规校验、品牌一致性。',
+      metrics:'点击率 · 完播率 · 转化率',
+      note:'5 个 SKU × 3 图 + 2 条视频脚本'
+    },
+    listing: {
+      index:'第 3 段', name:'上架与定价', risk:'L2', owner:'运营',
+      actions:'标题、卖点、类目、变体、价格、库存同步。',
+      failures:'类目错、关键词错、价格倒挂、库存不同步。',
+      ai:'Listing 生成、关键词覆盖、价格带建议、竞品监控。',
+      metrics:'上架通过率 · 价格竞争力',
+      note:'Listing 待创建 / 更新'
+    },
+    organic: {
+      index:'第 4 段', name:'自然流量', risk:'L2', owner:'内容 / 达人运营',
+      actions:'内容日历、达人/联盟、寄样、直播排期、UGC。',
+      failures:'内容断更、达人履约差、样本浪费。',
+      ai:'选题、脚本、达人匹配、发布节奏、效果归因。',
+      metrics:'自然 GMV 占比 · 互动率',
+      note:'内容日历待排期'
+    },
+    paid: {
+      index:'第 5 段', name:'付费广告', risk:'L3', owner:'投放',
+      actions:'广告计划、预算、出价、素材轮换、ROAS。',
+      failures:'预算烧穿、ROAS 低于盈亏线、素材疲劳。',
+      ai:'预算护栏、异常检测、暂停/放量建议、创意轮换。',
+      metrics:'ROAS · ACOS · CAC',
+      note:'3 个 Campaign · $10k 待批'
+    },
+    order: {
+      index:'第 6 段', name:'订单', risk:'L2', owner:'订单运营',
+      actions:'订单同步、库存预占、拆单/改址、缺货处理。',
+      failures:'超卖、超时未发、地址异常、重复履约。',
+      ai:'异常分类、拆单/改址方案、补偿、库存调拨。',
+      metrics:'迟发率 · 取消率 · 缺陷率',
+      note:'6 单异常 · 2 单 P0/P1'
+    },
+    fulfillment: {
+      index:'第 7 段', name:'库存与履约', risk:'L2', owner:'仓管 / 运营',
+      actions:'预占、拆单、换仓、补货、盘点。',
+      failures:'缺货、超卖、发错/漏发、盘点差异。',
+      ai:'库存调拨、拆单建议、补货预测、异常预警。',
+      metrics:'缺货率 · 库存周转 · 超卖',
+      note:'1 次拆单补偿待验证'
+    },
+    logistics: {
+      index:'第 8 段', name:'物流与关务', risk:'L3', owner:'物流 / 关务',
+      actions:'比价、发货、报关、轨迹、签收。',
+      failures:'清关失败、时效超限、丢件、运费倒挂。',
+      ai:'路由建议、时效预测、异常预警、报关资料校验。',
+      metrics:'时效达成率 · 扣关率 · 丢件率',
+      note:'1 票报关失败 → 补偿'
+    },
+    settlement: {
+      index:'第 9 段', name:'收款与结算', risk:'L3', owner:'财务',
+      actions:'结算、费用、退款、汇率、对账、税务。',
+      failures:'少结、多扣、汇率损失、退款漏记、税务风险。',
+      ai:'自动对账、差异归因、费用洞察、现金流预测。',
+      metrics:'差异率 · 回款周期 · 拒付率',
+      note:'3 笔对账差异 → 财务任务'
+    },
+    aftersales: {
+      index:'第 10 段', name:'售后与合规', risk:'L3', owner:'客服 / 合规',
+      actions:'退货、退款、纠纷、IP、产品安全。',
+      failures:'超退、误退、封店、侵权下架。',
+      ai:'政策 RAG、资格判定、证据组装、合规检查。',
+      metrics:'退款率 · 差评率 · 投诉率',
+      note:'1 个 SKU 合规剔除'
+    }
+  };
+
+  const stageDetail = $('#stageDetail');
+  function riskClass(risk){
+    if(risk.indexOf('L3') !== -1) return 'l3';
+    if(risk.indexOf('L2') !== -1) return 'l2';
+    return 'l1';
+  }
+  function renderStage(id){
+    const d = stageData[id];
+    if(!d || !stageDetail) return;
+    stageDetail.innerHTML = `
+      <div class="detail-head">
+        <div>
+          <span class="detail-kicker">${d.index} · 当前聚焦</span>
+          <h3>${d.name} <span class="risk ${riskClass(d.risk)}">${d.risk}</span></h3>
+        </div>
+        <div class="detail-owner"><span>主责</span>${d.owner}</div>
+      </div>
+      <div class="detail-grid">
+        <div><span class="detail-label">核心动作</span><p>${d.actions}</p></div>
+        <div><span class="detail-label">典型失败</span><p>${d.failures}</p></div>
+        <div><span class="detail-label">AI 可增强</span><p>${d.ai}</p></div>
+      </div>
+      <div class="detail-foot"><span>关键指标 · ${d.metrics}</span><span class="detail-note">${d.note}</span></div>
+    `;
+    stageDetail.classList.remove('is-swapping');
+    void stageDetail.offsetWidth;
+    stageDetail.classList.add('is-swapping');
+  }
+  $$('.stage').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $$('.stage').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderStage(btn.dataset.stage);
+    });
+  });
+  const initialStage = $('.stage[data-stage="order"]');
+  if(initialStage) initialStage.classList.add('active');
+  renderStage('order');
+
+  /* ---------- approvals ---------- */
+  const approvalState = {budget:null, price:null, refund:null};
+  const approvalCopy = {
+    budget:{title:'广告预算 · 3 个 Campaign', approve:'已准 · 广告预算写入执行', reject:'已驳 · 预算退回投放 Agent'},
+    price:{title:'涨价建议 · 1 个 SKU', approve:'已准 · 改价进入 Listing', reject:'已驳 · 改换 SKU 后重排'},
+    refund:{title:'退款 · 政策 RAG 已核验', approve:'已准 · 退款进入执行', reject:'已驳 · 退款退回结算 Agent'}
+  };
+  const approvalCount = $('#approvalCount');
+  const kpiApprovals = $('#kpiApprovals');
+
+  function remainingApprovals(){
+    return Object.keys(approvalState).filter(key => !approvalState[key]).length;
+  }
+  function syncFlow(){
+    const remaining = remainingApprovals();
+    const steps = $$('#flowSteps .step');
+    if(steps.length < 6) return;
+    steps.forEach(step => step.classList.remove('done','active','waiting'));
+    steps[0].classList.add('done');
+    steps[1].classList.add('done');
+    if(remaining === 0){
+      steps[2].classList.add('done');
+      steps[3].classList.add('active');
+      steps[4].classList.add('waiting');
+      steps[5].classList.add('waiting');
+    } else {
+      steps[2].classList.add('active');
+      steps[3].classList.add('waiting');
+      steps[4].classList.add('waiting');
+      steps[5].classList.add('waiting');
+    }
+  }
+  function updateApprovalCount(){
+    const remaining = remainingApprovals();
+    if(approvalCount) approvalCount.textContent = String(remaining);
+    if(kpiApprovals) kpiApprovals.innerHTML = remaining + ' <small>件</small>';
+    const approvalDots = $('#approvalDots');
+    if(approvalDots){
+      Array.from(approvalDots.children).forEach(function(dot, index){
+        dot.className = index < remaining ? 'on' : '';
+      });
+    }
+    const flowNote = $('#flowNote');
+    if(flowNote){
+      flowNote.textContent = remaining === 0
+        ? '审批已清 · 进入执行'
+        : '审批进行中 · ' + remaining + ' 件待批';
+    }
+    syncFlow();
+  }
+  function decideLocal(item, id, decision){
+    approvalState[id] = decision;
+    item.classList.add('decided', decision === 'approve' ? 'approved' : 'rejected');
+    const stamp = $('.stamp', item);
+    if(stamp) stamp.textContent = decision === 'approve' ? '准' : '驳';
+    const result = $('.approval-result', item);
+    if(result){
+      result.hidden = false;
+      result.textContent = decision === 'approve' ? '已准 · 写回审批案与审计' : '已驳 · 退回 Agent 重排';
+    }
+    $$('button[data-decision]', item).forEach(b => { b.disabled = true; });
+    updateApprovalCount();
+    addTrace(decision === 'approve' ? '审批通过' : '审批驳回', approvalCopy[id].title);
+    toast(decision === 'approve' ? approvalCopy[id].approve : approvalCopy[id].reject, decision === 'approve' ? 'ink' : 'red');
+  }
+  $$('.approval').forEach(item => {
+    item.addEventListener('click', async event => {
+      const btn = event.target.closest('button[data-decision]');
+      if(!btn || item.classList.contains('decided')) return;
+      const id = btn.dataset.id;
+      const decision = btn.dataset.decision;
+      if(!apiOnline){ decideLocal(item, id, decision); return; }
+      const buttons = $$('button[data-decision]', item);
+      buttons.forEach(b => { b.disabled = true; });
+      try{
+        const response = await api('/approvals/' + encodeURIComponent(id) + '/decision', {
+          method: 'POST',
+          body: JSON.stringify({decision: decision, actor: 'demo-operator'})
+        });
+        applySnapshot(response.snapshot);
+        toast(decision === 'approve' ? approvalCopy[id].approve : approvalCopy[id].reject, decision === 'approve' ? 'ink' : 'red');
+      }catch(error){
+        buttons.forEach(b => { b.disabled = false; });
+        toast('审批失败：' + error.message, 'red');
+      }
+    });
+  });
+  function resetApprovalsLocal(){
+    Object.keys(approvalState).forEach(key => { approvalState[key] = null; });
+    $$('.approval').forEach(item => {
+      item.classList.remove('decided','approved','rejected');
+      const stamp = $('.stamp', item);
+      if(stamp) stamp.textContent = '';
+      const result = $('.approval-result', item);
+      if(result){ result.hidden = true; result.textContent = ''; }
+      $$('button[data-decision]', item).forEach(b => { b.disabled = false; });
+    });
+    updateApprovalCount();
+    toast('审批案已重置 · 3 件待批', 'ink');
+  }
+  const resetApprovals = $('#resetApprovals');
+  if(resetApprovals){
+    resetApprovals.addEventListener('click', async () => {
+      if(!apiOnline){ resetApprovalsLocal(); return; }
+      resetApprovals.disabled = true;
+      try{
+        const snapshot = await api('/approvals/reset', {method: 'POST'});
+        applySnapshot(snapshot);
+        toast('审批案已重置 · 3 件待批', 'ink');
+      }catch(error){
+        toast('重置失败：' + error.message, 'red');
+      }finally{
+        resetApprovals.disabled = false;
+      }
+    });
+  }
+  updateApprovalCount();
+
+  /* ---------- flow steps + demo ---------- */
+  const flowNotes = {
+    '1':'目标接入：已解析 NestWell Home US / 美区 / 家居 / $100k / $10k。',
+    '2':'计划生成：DAG、风险与预算已标注，等待审批。',
+    '3':'审批：3 件待批，L2 ×1 / L3 ×2；剧本中 1 件将被驳回。',
+    '4':'执行：8 个 Agent 按能力、可用性、成本与风险分派。',
+    '5':'验证：Verifier 独立检查毛利、库存非负、预算、合规与审计。',
+    '6':'报告：GMV 预测、异常、审批、RPA 截图与 trace 回放。'
+  };
+  const flowNote = $('#flowNote');
+  const stepTargets = {'1':'overview','2':'chain','3':'approvals','4':'agents','5':'agents','6':'trace'};
+  function highlightStepTarget(n){
+    const target = document.getElementById(stepTargets[n] || '');
+    if(!target) return;
+    target.classList.add('focus-ring');
+    setTimeout(function(){ target.classList.remove('focus-ring'); }, 1200);
+  }
+  $$('#flowSteps .step-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const step = btn.closest('.step');
+      const n = step.dataset.step;
+      flowNote.textContent = flowNotes[n] || flowNote.textContent;
+      $$('#flowSteps .step').forEach(s => s.classList.remove('focus'));
+      step.classList.add('focus');
+      setTimeout(() => step.classList.remove('focus'), 900);
+      highlightStepTarget(n);
+    });
+  });
+
+  let demoRunning = false;
+  const demoNotes = [
+    '目标接入 · 结构化 intent 已完成',
+    '计划生成 · DAG 与风险标注完成',
+    '审批 · 3 件待批 · 1 件建议驳回',
+    '执行 · 订单 / 内容 / 履约 / 结算分派',
+    '验证 · Verifier 独立复核',
+    '报告 · 指标 / 证据 / trace 生成'
+  ];
+  const demoTrace = [
+    ['目标接入','NestWell US / 美区 / 家居'],
+    ['计划生成','DAG / 风险 / 预算'],
+    ['审批','3 件待批 · L2 ×1 / L3 ×2'],
+    ['执行','6 单异常 · 1 票扣关 · 3 笔差异'],
+    ['验证','毛利 / 库存 / 预算 / 合规'],
+    ['报告','指标 / 证据 / trace']
+  ];
+  async function runDemo(){
+    if(demoRunning) return;
+    demoRunning = true;
+    const playBtn = $('#playDemo');
+    if(playBtn){ playBtn.disabled = true; playBtn.textContent = '演示中…'; }
+    let report = null;
+    if(apiOnline){
+      try{
+        const data = await api('/demo/run', {method: 'POST'});
+        report = data.report;
+        applySnapshot(data.snapshot);
+      }catch(error){
+        toast('后端演示失败，改用本地动画：' + error.message, 'red');
+      }
+    }
+    const steps = $$('#flowSteps .step');
+    steps.forEach(step => { step.classList.remove('done','active','waiting'); });
+    if(steps[0]) steps[0].classList.add('active');
+    if(flowNote) flowNote.textContent = '演示开始 · 目标接入';
+    addTrace('演示开始', report ? '后端编排 · 固定种子' : 'Mock World / 固定种子');
+    for(let i = 0; i < steps.length; i++){
+      await sleep(720);
+      steps[i].classList.remove('active');
+      steps[i].classList.add('done');
+      if(steps[i + 1]) steps[i + 1].classList.add('active');
+      highlightStepTarget(String(i + 1));
+      if(flowNote) flowNote.textContent = demoNotes[i];
+      if(!report && demoTrace[i]) addTrace(demoTrace[i][0], demoTrace[i][1]);
+    }
+    await sleep(900);
+    if(playBtn){ playBtn.disabled = false; playBtn.textContent = '重播演示'; }
+    if(report){
+      (report.events || []).forEach(event => addTrace(event.title, event.detail, event.at));
+      toast(report.summary, 'ink');
+    } else {
+      toast('演示完成 · 3 次审批 / 1 次拒绝 / 1 次补偿', 'ink');
+    }
+    demoRunning = false;
+    await sleep(1500);
+    syncFlow();
+    const remaining = remainingApprovals();
+    if(flowNote) flowNote.textContent = remaining === 0 ? '演示结束 · 进入报告' : '演示结束 · 当前仍有 ' + remaining + ' 件待批';
+  }
+  const playDemo = $('#playDemo');
+  if(playDemo) playDemo.addEventListener('click', runDemo);
+  const playTrace = $('#playTrace');
+  if(playTrace) playTrace.addEventListener('click', runDemo);
+
+  /* ---------- command ---------- */
+  const commandForm = $('#commandForm');
+  const generateBtn = $('#generateBtn');
+  const goalInput = $('#goalInput');
+  if(commandForm){
+    commandForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      const value = goalInput ? goalInput.value.trim() : '';
+      if(!value){
+        toast('请先写下一个目标', 'red');
+        if(goalInput) goalInput.focus();
+        return;
+      }
+      generateBtn.disabled = true;
+      generateBtn.textContent = '解析中…';
+      if(apiOnline){
+        try{
+          const snapshot = await api('/goals', {
+            method: 'POST',
+            body: JSON.stringify({instruction: value})
+          });
+          applySnapshot(snapshot);
+          toast('计划已生成 · 等待 L2/L3 审批', 'ink');
+          highlightStepTarget('2');
+        }catch(error){
+          toast('目标解析失败：' + error.message, 'red');
+        }finally{
+          generateBtn.disabled = false;
+          generateBtn.textContent = '生成调度计划';
+        }
+        return;
+      }
+      setTimeout(() => {
+        generateBtn.disabled = false;
+        generateBtn.textContent = '生成调度计划';
+        syncFlow();
+        if(flowNote) flowNote.textContent = '计划已生成 · 3 件待批 · 6 单异常';
+        addTrace('计划生成','目标已结构化 · DAG / 风险 / 预算');
+        toast('计划已生成 · 等待 L2/L3 审批', 'ink');
+      }, 900);
+    });
+  }
+
+  /* ---------- trace ---------- */
+  const traceList = $('#traceList');
+  function addTrace(title, detail, time){
+    if(!traceList) return;
+    const stamp = time || new Date().toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit', hour12:false});
+    const li = document.createElement('li');
+    li.innerHTML = '<time>' + stamp + '</time><div><b>' + title + '</b><small>' + detail + '</small></div>';
+    traceList.appendChild(li);
+    while(traceList.children.length > 12) traceList.removeChild(traceList.firstElementChild);
+    traceList.scrollTop = traceList.scrollHeight;
+  }
+  function renderTrace(events){
+    if(!traceList) return;
+    traceList.innerHTML = '';
+    (events || []).forEach(event => {
+      const li = document.createElement('li');
+      const time = document.createElement('time');
+      time.textContent = event.at;
+      const body = document.createElement('div');
+      const title = document.createElement('b');
+      title.textContent = event.title;
+      const detail = document.createElement('small');
+      detail.textContent = event.detail;
+      body.appendChild(title);
+      body.appendChild(detail);
+      li.appendChild(time);
+      li.appendChild(body);
+      traceList.appendChild(li);
+    });
+    traceList.scrollTop = traceList.scrollHeight;
+  }
+
+  /* ---------- snapshot rendering ---------- */
+  const kpiGmv = $('#kpiGmv');
+  const kpiExceptions = $('#kpiExceptions');
+  const kpiCompensation = $('#kpiCompensation');
+  const agentStatusClasses = {idle:'', running:'', done:'done', waiting:'wait', error:'alert'};
+  const stageStatuses = ['done','running','alert','waiting'];
+
+  function applySnapshot(snapshot){
+    if(!snapshot) return;
+    if(goalInput && snapshot.goal && document.activeElement !== goalInput){
+      goalInput.value = snapshot.goal.instruction;
+    }
+    const kpis = snapshot.kpis || {};
+    if(kpiGmv && typeof kpis.gmv_target === 'number'){
+      kpiGmv.textContent = '$' + Math.round(kpis.gmv_target / 1000) + 'k';
+    }
+    if(kpiExceptions && typeof kpis.exceptions === 'number'){
+      kpiExceptions.innerHTML = kpis.exceptions + ' <small>单</small>';
+    }
+    if(kpiApprovals && typeof kpis.approvals_pending === 'number'){
+      kpiApprovals.innerHTML = kpis.approvals_pending + ' <small>件</small>';
+    }
+    if(kpiCompensation && typeof kpis.compensations === 'number'){
+      kpiCompensation.innerHTML = kpis.compensations + ' <small>次</small>';
+    }
+
+    const approvals = snapshot.approvals || {};
+    Object.keys(approvalState).forEach(key => { approvalState[key] = null; });
+    $$('.approval[data-id]').forEach(item => {
+      const approval = approvals[item.dataset.id];
+      if(!approval) return;
+      const status = approval.status;
+      const decided = status !== 'pending';
+      approvalState[item.dataset.id] = status === 'approved' ? 'approve' : status === 'rejected' ? 'reject' : null;
+      item.classList.toggle('decided', decided);
+      item.classList.toggle('approved', status === 'approved');
+      item.classList.toggle('rejected', status === 'rejected');
+      const stamp = $('.stamp', item);
+      if(stamp) stamp.textContent = approval.stamp || '';
+      const result = $('.approval-result', item);
+      if(result){
+        if(!decided){
+          result.hidden = true;
+          result.textContent = '';
+        } else {
+          const actor = approval.actor || 'demo-operator';
+          const at = approval.decided_at ? ' · ' + approval.decided_at : '';
+          result.hidden = false;
+          result.textContent = (status === 'approved' ? '已准 · ' : '已驳 · ') + actor + at;
+        }
+      }
+      $$('button[data-decision]', item).forEach(b => { b.disabled = decided; });
+    });
+    updateApprovalCount();
+    if(flowNote && snapshot.flow_note) flowNote.textContent = snapshot.flow_note;
+
+    const stages = $$('.stage[data-stage]');
+    (snapshot.chain || []).forEach((stage, index) => {
+      const el = stages[index];
+      if(!el) return;
+      stageStatuses.forEach(name => el.classList.remove(name));
+      el.classList.add(stage.status);
+      const meta = $('.stage-meta', el);
+      if(meta) meta.textContent = stage.meta;
+    });
+
+    (snapshot.agents || []).forEach(agent => {
+      const row = $('.agent-row[data-agent="' + agent.id + '"]');
+      if(!row) return;
+      const statusEl = $('.agent-status', row);
+      if(statusEl){
+        statusEl.textContent = agent.status_label;
+        const extra = (agent.id === 'order' || agent.id === 'fulfillment')
+          ? 'alert'
+          : (agentStatusClasses[agent.status] || '');
+        statusEl.className = 'agent-status' + (extra ? ' ' + extra : '');
+      }
+      const taskEl = $('.agent-task', row);
+      if(taskEl) taskEl.textContent = agent.current_task;
+    });
+
+    (snapshot.exceptions || []).forEach(item => {
+      const el = $('.exception[data-exception="' + item.id + '"]');
+      if(!el) return;
+      const badge = $('.p-badge', el);
+      if(badge){
+        badge.textContent = item.priority;
+        badge.className = 'p-badge' + (item.priority === 'P0' ? ' p0' : '');
+      }
+      const small = $('.exception-main small', el);
+      if(small) small.textContent = item.id + ' · ' + item.li + ' · ' + item.sla;
+      const meta = $('.exception-meta', el);
+      if(meta) meta.textContent = item.count;
+    });
+
+    renderTrace(snapshot.trace || []);
+  }
+
+  /* ---------- exception drawer ---------- */
+  const exceptionData = {
+    'ORD-01': {
+      title:'超时未发货', p:'P0', li:'L5 / I4', sla:'15 分钟响应 · 1 小时止损',
+      trigger:'订单临近平台发货截止，仓库未接单 / 未出库 / 库存不足。',
+      phases:[
+        ['0–30 分钟', ['拉出所有临期订单，按剩余时间排序。','检查仓库接单、库存预占、地址校验、支付状态。','能发的优先发；不能发的拆单/换仓；地址异常的改址或联系客户。']],
+        ['1–4 小时', ['与仓库确认产能和截单时间；必要时切换备用仓 / 承运商。','对无法按时发货的订单，主动通知客户并给方案（等待 / 换货 / 退款）。','在平台后台做延迟发货报备（若规则允许），避免计入违规。']],
+        ['24–72 小时', ['复盘根因：库存、仓库、地址、支付、系统同步。','对批量问题调整安全库存 / 截单规则 / 仓库分配。','对受影响客户补偿（优惠券 / 运费 / 小礼品），记录成本。']]
+      ],
+      automation:'order_list_overdue → 分类 → 拆单/改址建议 → L2 审批 → 执行 → 报告；超时升级人工。'
+    },
+    'INV-01': {
+      title:'库存不足 / 超卖', p:'P1', li:'L4 / I4', sla:'30 分钟响应 · 4 小时止损',
+      trigger:'可用库存 < 订单需求，或同一 SKU 被多渠道同时卖出。',
+      phases:[
+        ['0–30 分钟', ['冻结该 SKU 的新订单 / 广告，避免继续超卖。','盘点可用、预占、在途、其他仓库存。','能调拨的调拨，能拆单的拆单，不能履约的取消并通知客户。']],
+        ['1–4 小时', ['与供应商确认补货交期；必要时空运 / 加急。','对已超卖订单给出方案：等待 / 换色换码 / 退款 + 补偿。','检查同步链路：平台、ERP、WMS 是否有延迟。']],
+        ['24–72 小时', ['复盘安全库存、同步频率、预占逻辑、促销叠加。','调整补货点和缓冲库存；对高风险 SKU 设置限购。']]
+      ],
+      automation:'inventory_get → 拆单/调拨/取消建议 → L2 审批 → 补偿；Verifier 检查库存非负。'
+    },
+    'ORD-03': {
+      title:'地址异常 / 改址', p:'P1', li:'L4 / I3', sla:'30 分钟响应 · 4 小时止损',
+      trigger:'地址校验失败、客户申请改址、承运商反馈无法投递。',
+      phases:[
+        ['0–30 分钟', ['校验地址字段：收件人、电话、省市区、邮编、门牌。','未发货允许改址；已发货联系承运商拦截 / 改派。','高风险地址（偏远、转运仓、频繁退件）人工确认。']],
+        ['1–4 小时', ['与客户确认新地址和时效；必要时补运费差价。','无法改派则退回 / 退款 / 重发。']],
+        ['24–72 小时', ['复盘地址校验规则；对高频错误地区加提示。','更新地址库 / 黑名单。']]
+      ],
+      automation:'address.validate → 改址建议 → L2 审批 → 执行 → 审计；已发货转人工。'
+    },
+    'LOG-03': {
+      title:'海关扣关 / 查验', p:'P1', li:'L3 / I4', sla:'30 分钟响应 · 4 小时止损',
+      trigger:'清关状态停滞、承运商要求补资料、海关查验 / 征税。',
+      phases:[
+        ['0–30 分钟', ['确认扣关原因：申报价值、HS 编码、品名、认证、禁限售、收件人信息。','收集资料：发票、装箱单、成分 / 材质、认证、授权书。','通知客户可能延迟，避免承诺不确定时效。']],
+        ['1–4 小时', ['交给报关行 / 承运商处理；能补资料立即补。','评估退运 / 销毁 / 转口成本；高货值考虑律师 / 关务顾问。']],
+        ['24–72 小时', ['跟踪清关；对批量问题切换口岸 / 物流商。','复盘 HS 归类和申报流程。']]
+      ],
+      automation:'customs_declare → 资料校验 → 补资料 / 换渠道建议 → L2 审批；失败转人工。'
+    },
+    'PAY-02': {
+      title:'结算少结 / 多扣', p:'P1', li:'L4 / I3', sla:'30 分钟响应 · 4 小时止损',
+      trigger:'结算单与订单 / 退款 / 费用对不上；到账少于预期。',
+      phases:[
+        ['0–30 分钟', ['拉结算单、订单、退款、广告费、运费、平台费。','按订单 / 费用类型拆分差异；标记疑似重复扣费 / 漏结。','冻结相关 SKU 的促销（如费用异常大）。']],
+        ['1–4 小时', ['向平台 / PSP 提交工单，附差异明细和证据。','财务做暂估调整，避免现金流误判。']],
+        ['24–72 小时', ['跟踪工单；对系统性差异调整定价 / 费用模型。','更新对账规则和告警阈值。']]
+      ],
+      automation:'settlement_fetch → 差异拆分 → 工单 / 暂估 → 财务任务；差异不自动打款。'
+    },
+    'ORD-04': {
+      title:'重复订单 / 重复扣款', p:'P2', li:'L3 / I3', sla:'30 分钟响应 · 4 小时止损',
+      trigger:'同一客户、同一 SKU 出现多单，或支付渠道重复扣款。',
+      phases:[
+        ['0–30 分钟', ['按客户 / SKU / 时间窗口聚合重复单。','检查幂等键、支付流水、订单状态。','能合并的合并，需取消的取消，已扣款进入退款流程。']],
+        ['1–4 小时', ['通知客户并确认处理方案。','对重复扣款做冲正 / 退款，保留审计记录。']],
+        ['24–72 小时', ['复盘去重规则、幂等键覆盖、风控阈值。','补充 Golden Task，防止回归。']]
+      ],
+      automation:'order_dedupe → 合并 / 取消 / 退款建议 → L2 审批 → 执行 → 审计。'
+    }
+  };
+  const drawer = $('#drawer');
+  const drawerBackdrop = $('#drawerBackdrop');
+  const drawerBody = $('#drawerBody');
+  const drawerTitle = $('#drawerTitle');
+  const drawerKicker = $('#drawerKicker');
+  let lastFocused = null;
+  let drawerOpen = false;
+
+  function normalizeDrawerData(data){
+    if(!data) return null;
+    if(data.playbook){
+      return {
+        title: data.title,
+        p: data.priority,
+        li: data.li,
+        sla: data.sla,
+        owner: data.owner || '',
+        trigger: data.playbook.trigger,
+        phases: (data.playbook.phases || []).map(phase => [phase.label, phase.steps || []]),
+        automation: data.playbook.automation
+      };
+    }
+    return data;
+  }
+  function renderDrawer(data){
+    const d = normalizeDrawerData(data);
+    if(!d || !drawer || !drawerBody) return;
+    lastFocused = document.activeElement;
+    drawerKicker.textContent = d.p + ' · ' + d.li;
+    drawerTitle.textContent = d.title;
+    drawerBody.innerHTML = `
+      <div class="drawer-stamp">${d.p}</div>
+      <div class="drawer-meta"><span>${d.li}</span><span>${d.sla}</span>${d.owner ? '<span>' + d.owner + '</span>' : ''}<span>Mock 异常</span></div>
+      <div class="drawer-section"><span class="detail-label">触发</span><p>${d.trigger}</p></div>
+      <div class="drawer-timeline">
+        ${(d.phases || []).map(function(pair){
+          return '<div class="drawer-phase"><h4>' + pair[0] + '</h4><ul>' + (pair[1] || []).map(function(item){ return '<li>' + item + '</li>'; }).join('') + '</ul></div>';
+        }).join('')}
+      </div>
+      <div class="drawer-section"><span class="detail-label">Agent 自动化</span><div class="drawer-automation">${d.automation}</div></div>
+    `;
+    drawerBackdrop.hidden = false;
+    drawer.hidden = false;
+    requestAnimationFrame(function(){
+      drawerBackdrop.classList.add('open');
+      drawer.classList.add('open');
+    });
+    document.body.style.overflow = 'hidden';
+    drawerOpen = true;
+    const closeBtn = $('#drawerClose');
+    if(closeBtn) closeBtn.focus();
+  }
+  function openDrawer(id){
+    const data = exceptionData[id];
+    if(data) renderDrawer(data);
+  }
+  function closeDrawer(){
+    if(!drawerOpen || !drawer) return;
+    drawerBackdrop.classList.remove('open');
+    drawer.classList.remove('open');
+    document.body.style.overflow = '';
+    drawerOpen = false;
+    setTimeout(function(){
+      drawerBackdrop.hidden = true;
+      drawer.hidden = true;
+    }, 300);
+    if(lastFocused && typeof lastFocused.focus === 'function') lastFocused.focus();
+  }
+  $$('.exception').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.exception;
+      if(!apiOnline){ openDrawer(id); return; }
+      try{
+        const data = await api('/exceptions/' + encodeURIComponent(id));
+        renderDrawer(data);
+      }catch(error){
+        toast('异常详情读取失败，展示本地 playbook', 'red');
+        openDrawer(id);
+      }
+    });
+  });
+  const drawerClose = $('#drawerClose');
+  if(drawerClose) drawerClose.addEventListener('click', closeDrawer);
+  if(drawerBackdrop) drawerBackdrop.addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', event => {
+    if(event.key === 'Escape' && drawerOpen) closeDrawer();
+  });
+
+  /* ---------- toast ---------- */
+  const toastEl = $('#toast');
+  let toastTimer;
+  function toast(message, kind){
+    if(!toastEl) return;
+    toastEl.textContent = message;
+    toastEl.className = 'toast show ' + (kind || 'ink');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.classList.remove('show'); }, 3200);
+  }
+
+  /* ---------- startup ---------- */
+  loadSnapshot();
+
+  /* ---------- deep links for QA ---------- */
+  const params = new URLSearchParams(window.location.search);
+  const drawerParam = params.get('drawer');
+  if(drawerParam) setTimeout(function(){ openDrawer(drawerParam); }, 320);
+  if(params.get('demo') === '1') setTimeout(runDemo, 700);
+})();
+</script>
+</body>
+</html>
