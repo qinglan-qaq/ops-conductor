@@ -16,24 +16,32 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from opsconductor.dispatch.adapters.container import get_service
+from opsconductor.dispatch.adapters.container import (
+    get_integration_registry,
+    get_service,
+)
 from opsconductor.dispatch.adapters.serialize import (
     approval_payload,
     exception_payload,
+    integrations_payload,
     report_payload,
     snapshot_payload,
+    stage_detail_payload,
 )
+from opsconductor.dispatch.application.integrations import AdapterRegistry
 from opsconductor.dispatch.application.service import DispatchService
 from opsconductor.dispatch.domain.errors import (
     ApprovalAlreadyDecided,
     ApprovalNotFound,
     ExceptionNotFound,
     InvalidGoal,
+    StageNotFound,
 )
 
 router = APIRouter(prefix="/api/v1/dispatch", tags=["dispatch"])
 
 Service = Annotated[DispatchService, Depends(get_service)]
+Integrations = Annotated[AdapterRegistry, Depends(get_integration_registry)]
 
 
 class GoalRequest(BaseModel):
@@ -58,6 +66,21 @@ def _invalid(exc: Exception) -> HTTPException:
 def snapshot(service: Service) -> dict[str, Any]:
     """返回调度台完整快照。"""
     return snapshot_payload(service.snapshot())
+
+
+@router.get("/stages/{stage_id}")
+def get_stage(stage_id: str, service: Service) -> dict[str, Any]:
+    """返回阶段工作台数据；未知阶段与控制塔返回 404。"""
+    try:
+        return stage_detail_payload(service.get_stage_detail(stage_id))
+    except StageNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/integrations")
+def get_integrations(registry: Integrations) -> dict[str, Any]:
+    """返回本期只读的平台集成健康与能力清单。"""
+    return integrations_payload(registry)
 
 
 @router.post("/goals")

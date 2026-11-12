@@ -40,6 +40,7 @@ APPROVAL_FIELDS = {
     "stamp",
     "actor",
     "decided_at",
+    "stage_id",
 }
 EXCEPTION_FIELDS = {
     "id",
@@ -50,6 +51,7 @@ EXCEPTION_FIELDS = {
     "owner",
     "count",
     "playbook",
+    "stage_id",
 }
 TRACE_FIELDS = {"at", "title", "detail"}
 
@@ -87,6 +89,9 @@ def test_snapshot_payload_is_plain_json_and_matches_frontend_shape(client):
         "approvals",
         "exceptions",
         "trace",
+        "navigation",
+        "status_summary",
+        "approval_progress",
     }
     assert set(data["goal"]) == GOAL_FIELDS
     assert set(data["kpis"]) == KPI_FIELDS
@@ -254,6 +259,89 @@ def test_reset_restores_seed(client):
     assert data["kpis"]["approvals_pending"] == 3
     assert len(data["trace"]) == 7
     assert data["trace"][0]["title"] == "目标接入"
+
+
+def test_snapshot_exposes_navigation_status_and_approval_progress(client):
+    data = client.get(SNAPSHOT).json()
+
+    assert len(data["navigation"]) == 11
+    assert data["navigation"][0]["id"] == "selection"
+    assert data["navigation"][-1]["id"] == "control"
+    assert data["navigation"][-1]["order_label"] == "—"
+    assert data["navigation"][-1]["approval_count"] == 3
+    assert data["status_summary"]["chain"]["alert"] == 2
+    assert data["status_summary"]["agents"]["running"] == 4
+    assert data["approval_progress"] == {
+        "total": 3,
+        "pending": 3,
+        "approved": 0,
+        "rejected": 0,
+        "decided_percent": 0,
+        "l2_total": 1,
+        "l3_total": 2,
+    }
+
+
+def test_stage_detail_endpoint_returns_agent_output(client):
+    response = client.get("/api/v1/dispatch/stages/order")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "订单"
+    assert data["status"] == "alert"
+    assert data["result"]["summary"].startswith("分类 6 单异常")
+    assert data["result"]["metrics"]["exceptions"] == 6
+    assert data["result"]["source"]["adapter"] == "MockPlatformAdapter"
+    assert [artifact["name"] for artifact in data["result"]["artifacts"]] == [
+        "order-exceptions.csv",
+        "split-address-plan.json",
+    ]
+    assert [item["id"] for item in data["exceptions"]] == [
+        "ORD-01",
+        "ORD-03",
+        "ORD-04",
+    ]
+
+
+def test_stage_detail_filters_budget_approval_to_paid_stage(client):
+    data = client.get("/api/v1/dispatch/stages/paid").json()
+
+    assert [item["id"] for item in data["approvals"]] == ["budget"]
+    assert data["approvals"][0]["stage_id"] == "paid"
+    assert data["result"]["metrics"]["budget"] == 10000
+
+
+def test_unknown_and_control_stage_return_404(client):
+    assert client.get("/api/v1/dispatch/stages/unknown").status_code == 404
+    assert client.get("/api/v1/dispatch/stages/control").status_code == 404
+
+
+def test_approval_progress_updates_after_decision(client):
+    client.post(DECIDE_BUDGET, json={"decision": "approve"})
+
+    progress = client.get(SNAPSHOT).json()["approval_progress"]
+
+    assert progress["pending"] == 2
+    assert progress["approved"] == 1
+    assert progress["decided_percent"] == 33
+
+
+def test_integrations_endpoint_exposes_mock_health(client):
+    response = client.get("/api/v1/dispatch/integrations")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["default_platform"] == "mock-nestwell-us"
+    assert len(data["platforms"]) == 1
+    platform = data["platforms"][0]
+    assert platform["name"] == "NestWell Home US"
+    assert platform["status"] == "mock"
+    assert platform["mode"] == "mock"
+    assert platform["freshness"] == "fresh"
+    assert platform["last_sync_at"] == "10:42"
+    assert "data.orders" in platform["capabilities"]
+    assert "control.price" in platform["capabilities"]
+    assert platform["warnings"] == []
 
 
 def test_demo_run_returns_report_and_snapshot(client):

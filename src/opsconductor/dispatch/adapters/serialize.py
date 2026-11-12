@@ -18,18 +18,32 @@ from __future__ import annotations
 
 from typing import Any
 
+from opsconductor.dispatch.application.integrations import AdapterRegistry
 from opsconductor.dispatch.application.orchestrator import DemoRunReport
-from opsconductor.dispatch.application.service import DispatchSnapshot, KpiSnapshot
+from opsconductor.dispatch.application.service import (
+    ApprovalProgress,
+    DispatchSnapshot,
+    KpiSnapshot,
+    StageDetail,
+    StageNavigation,
+    StatusSummary,
+)
 from opsconductor.dispatch.domain.enums import AgentStatus, ApprovalStatus
 from opsconductor.dispatch.domain.models import (
     AgentCard,
     ApprovalCase,
+    Artifact,
     ChainStage,
     ExceptionCase,
     Goal,
+    IntegrationHealth,
+    Metric,
     Plan,
     PlanStep,
     Playbook,
+    StageDefinition,
+    StageResult,
+    StageStep,
     TraceEvent,
     VerificationResult,
 )
@@ -154,6 +168,7 @@ def approval_payload(approval: ApprovalCase) -> dict[str, Any]:
         "stamp": _APPROVAL_STAMPS.get(approval.status),
         "actor": approval.actor,
         "decided_at": approval.decided_at,
+        "stage_id": approval.stage_id,
     }
 
 
@@ -180,6 +195,7 @@ def exception_payload(exception: ExceptionCase) -> dict[str, Any]:
         "owner": exception.owner,
         "count": exception.count,
         "playbook": playbook_payload(exception.playbook),
+        "stage_id": exception.stage_id,
     }
 
 
@@ -194,6 +210,160 @@ def verification_payload(result: VerificationResult) -> dict[str, Any]:
         "passed": result.passed,
         "checks": list(result.checks),
         "vetoed": list(result.vetoed),
+    }
+
+
+def artifact_payload(artifact: Artifact) -> dict[str, Any]:
+    """序列化阶段产物引用。"""
+    return {
+        "name": artifact.name,
+        "kind": artifact.kind.value,
+        "uri": artifact.uri,
+        "description": artifact.description,
+    }
+
+
+def metric_payload(metric: Metric) -> dict[str, Any]:
+    """序列化单个指标；小数指标保持字符串。"""
+    return {"key": metric.key, "value": metric.value}
+
+
+def stage_result_payload(result: StageResult) -> dict[str, Any]:
+    """序列化子 Agent 的阶段产出；``metrics`` 转为 JSON 对象。"""
+    return {
+        "stage_id": result.stage_id,
+        "agent_id": result.agent_id,
+        "status": result.status.value,
+        "summary": result.summary,
+        "artifacts": [artifact_payload(item) for item in result.artifacts],
+        "metrics": {metric.key: metric.value for metric in result.metrics},
+        "evidence": list(result.evidence),
+        "source": {
+            "platform": result.provenance.platform,
+            "shop_id": result.provenance.shop_id,
+            "adapter": result.provenance.adapter,
+            "synced_at": result.provenance.synced_at,
+            "schema_version": result.provenance.schema_version,
+        },
+        "at": result.at,
+    }
+
+
+def stage_step_payload(step: StageStep) -> dict[str, Any]:
+    """序列化阶段子流程。"""
+    return {"id": step.id, "name": step.name}
+
+
+def stage_definition_payload(definition: StageDefinition) -> dict[str, Any]:
+    """序列化阶段静态定义。"""
+    return {
+        "id": definition.id,
+        "order_label": definition.order_label,
+        "name": definition.name,
+        "owner": definition.owner,
+        "risk": definition.risk.value,
+        "actions": list(definition.actions),
+        "failures": list(definition.failures),
+        "ai": list(definition.ai),
+        "metrics": list(definition.metrics),
+        "steps": [stage_step_payload(step) for step in definition.steps],
+    }
+
+
+def stage_navigation_payload(navigation: StageNavigation) -> dict[str, Any]:
+    """序列化侧边栏场景目录。"""
+    return {
+        "id": navigation.id,
+        "order_label": navigation.order_label,
+        "name": navigation.name,
+        "status": navigation.status.value,
+        "meta": navigation.meta,
+        "approval_count": navigation.approval_count,
+        "exception_count": navigation.exception_count,
+        "steps": [stage_step_payload(step) for step in navigation.steps],
+    }
+
+
+def approval_progress_payload(progress: ApprovalProgress) -> dict[str, Any]:
+    """序列化首页审批进度。"""
+    return {
+        "total": progress.total,
+        "pending": progress.pending,
+        "approved": progress.approved,
+        "rejected": progress.rejected,
+        "decided_percent": progress.decided_percent,
+        "l2_total": progress.l2_total,
+        "l3_total": progress.l3_total,
+    }
+
+
+def status_summary_payload(summary: StatusSummary) -> dict[str, Any]:
+    """序列化链路、Agent、审批与异常分布。"""
+    return {
+        "chain": dict(summary.chain),
+        "agents": dict(summary.agents),
+        "approvals": approval_progress_payload(summary.approvals),
+        "exceptions": dict(summary.exceptions),
+    }
+
+
+def stage_detail_payload(detail: StageDetail) -> dict[str, Any]:
+    """序列化阶段工作台定义、结果与上下文。"""
+    definition = stage_definition_payload(detail.definition)
+    return {
+        **definition,
+        "status": detail.status.value,
+        "meta": detail.meta,
+        "result": (
+            stage_result_payload(detail.result)
+            if detail.result is not None
+            else None
+        ),
+        "approvals": [approval_payload(item) for item in detail.approvals],
+        "exceptions": [exception_payload(item) for item in detail.exceptions],
+    }
+
+
+def integration_health_payload(
+    platform: str,
+    shop_id: str,
+    name: str,
+    health: IntegrationHealth,
+) -> dict[str, Any]:
+    """序列化单个平台/店铺的集成健康。"""
+    return {
+        "platform": platform,
+        "shop_id": shop_id,
+        "name": name,
+        "status": health.status.value,
+        "mode": health.mode.value,
+        "capabilities": [capability.value for capability in health.capabilities],
+        "last_sync_at": health.last_sync_at,
+        "freshness": health.freshness.value,
+        "warnings": list(health.warnings),
+    }
+
+
+def integrations_payload(registry: AdapterRegistry) -> dict[str, Any]:
+    """序列化 Adapter Registry 的只读集成健康视图。"""
+    platforms = []
+    default_platform = ""
+    for index, adapter in enumerate(registry.all()):
+        health = adapter.health()
+        manifest = adapter.manifest()
+        if index == 0:
+            default_platform = f"{health.platform}-{health.shop_id}"
+        platforms.append(
+            integration_health_payload(
+                health.platform,
+                health.shop_id,
+                manifest.display_name,
+                health,
+            )
+        )
+    return {
+        "default_platform": default_platform,
+        "platforms": platforms,
     }
 
 
@@ -212,6 +382,11 @@ def snapshot_payload(snapshot: DispatchSnapshot) -> dict[str, Any]:
         },
         "exceptions": [exception_payload(case) for case in snapshot.exceptions],
         "trace": [trace_payload(event) for event in snapshot.trace],
+        "navigation": [
+            stage_navigation_payload(navigation) for navigation in snapshot.navigation
+        ],
+        "status_summary": status_summary_payload(snapshot.status_summary),
+        "approval_progress": approval_progress_payload(snapshot.approval_progress),
     }
 
 
@@ -231,14 +406,25 @@ __all__ = [
     "agent_payload",
     "agent_status_label",
     "approval_payload",
+    "approval_progress_payload",
+    "artifact_payload",
     "chain_payload",
     "exception_payload",
     "goal_payload",
+    "integration_health_payload",
+    "integrations_payload",
     "kpi_payload",
+    "metric_payload",
     "plan_payload",
     "playbook_payload",
     "report_payload",
     "snapshot_payload",
+    "stage_definition_payload",
+    "stage_detail_payload",
+    "stage_navigation_payload",
+    "stage_result_payload",
+    "stage_step_payload",
+    "status_summary_payload",
     "step_payload",
     "trace_payload",
     "verification_payload",
