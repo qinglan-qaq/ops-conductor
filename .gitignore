@@ -49,6 +49,15 @@ logs/
 Thumbs.db
 desktop.ini
 
+# ---------- 前端 ----------
+frontend/node_modules/
+*.tsbuildinfo
+frontend/test-results/
+frontend/playwright-report/
+# Demo 需要 FastAPI 在无 Node 环境下也能直接托管构建产物。
+!frontend/dist/
+!frontend/dist/**
+
 # ---------- 本地环境与密钥 ----------
 .env
 .env.*

@@ -33,6 +33,10 @@ if [ -z "$PY" ]; then
   fi
 fi
 
+if [ ! -f frontend/dist/index.html ]; then
+  echo "提示：frontend/dist 缺失，/dispatch 将返回 503；先运行 bash scripts/build_frontend.sh。" >&2
+fi
+
 if ! "$PY" -c "import fastapi, uvicorn" >/dev/null 2>&1; then
   echo "找不到可用的 Python 环境 '$CONDA_ENV'。" >&2
   echo "请先 conda activate '$CONDA_ENV'，或设置 OPSCONDUCTOR_PYTHON 指向解释器。" >&2
