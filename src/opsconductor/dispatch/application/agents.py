@@ -34,6 +34,7 @@ APPROVAL_BUDGET = ApprovalDraft(
     owner="投放 Agent → 财务小财",
     impact="总额 $10,000 · 超过 L3 阈值",
     recommended=Decision.approve,
+    stage_id="paid",
 )
 
 APPROVAL_PRICE = ApprovalDraft(
@@ -44,6 +45,7 @@ APPROVAL_PRICE = ApprovalDraft(
     owner="定价 Agent → 运营小运",
     impact="影响 Listing 价格 · 剧本中运营驳回后改换 SKU",
     recommended=Decision.reject,
+    stage_id="listing",
 )
 
 APPROVAL_REFUND = ApprovalDraft(
@@ -54,6 +56,7 @@ APPROVAL_REFUND = ApprovalDraft(
     owner="结算 Agent → 财务小财",
     impact="政策相符 · 资金动作必须人工审批",
     recommended=Decision.approve,
+    stage_id="settlement",
 )
 
 
