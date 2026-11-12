@@ -10,6 +10,8 @@
 
 **Spec：** [docs/specs/2026-11-12-dispatch-console-enhancement-design.md](../specs/2026-11-12-dispatch-console-enhancement-design.md)
 
+**状态：** 已执行（2026-11-12）。后端 87 passed；Vitest 13 passed；Playwright 9 passed；ruff/mypy/typecheck/build 通过。
+
 ## 全局约束
 
 - 现有 53 个后端测试必须继续通过；新增字段只做增量，破坏性断言先更新夹具再改实现。

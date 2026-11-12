@@ -15,6 +15,20 @@
 2. **售后退款闭环**：检索售后政策，判定退款资格与金额，审批后执行退款并回写工单。
 3. **多仓库存调拨**：识别缺货仓与积压仓，生成调拨建议，审批后执行并校验库存一致性。
 
+## 统一台前调度 Demo（Vue 3）
+
+调度台使用独立的 `opsconductor.dispatch` 六边形切片，内存仓储 + Mock 平台适配器，不依赖 PostgreSQL、Redis 或真实平台凭据：
+
+```bash
+bash scripts/build_frontend.sh          # 构建 frontend/dist
+PORT=8010 bash scripts/demo_dispatch.sh
+# http://127.0.0.1:8010/dispatch
+```
+
+页面提供场景目录（10 阶段 + 控制塔）、今日态势、阶段工作台（Agent 摘要/产物/指标/证据/来源）、审批、异常 playbook 与平台集成健康。前端开发用 `cd frontend && npm run dev`（Vite 代理 `/api` 到 8010）；测试命令见 [前端说明](frontend/README.md)。
+
+平台控制与数据获取已按 canonical model + `CommerceDataPort` / `PlatformControlPort` / AdapterRegistry 预留；本期只实现 `MockPlatformAdapter`，真实同步与控制写端点未启用。
+
 ## 架构
 
 ```mermaid
@@ -217,7 +231,9 @@ src/opsconductor/
 
 - [总规格 SPEC.md](SPEC.md) — 平台目标、端到端链路、六平面架构、归因/持久化/Skill/SOP/飞轮、验收与开放问题（审查稿）
 - [文档索引](docs/README.md)
-- [跨境电商台前调度 Demo](design/cross-border-dispatch/README.md) — 朱墨批阅台页面 + 可运行 FastAPI 后端
+- [跨境电商台前调度 Demo](design/cross-border-dispatch/README.md) — Vue 3 场景目录 + 阶段工作台 + 可运行 FastAPI 后端
+- [台前调度台 v1.2 设计与计划](docs/specs/2026-11-12-dispatch-console-enhancement-design.md) — 阶段结果、Vue 前端与平台集成边界
+- [前端说明](frontend/README.md) — 开发、构建、TypeScript/Vitest/Playwright 命令
 - [系统设计](docs/design.md)
 - [MVP 设计规格](docs/specs/2026-11-04-mvp-order-exception-design.md)
 - [3 分钟演示脚本](docs/demo-script.md)

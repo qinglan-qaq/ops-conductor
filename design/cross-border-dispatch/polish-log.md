@@ -80,3 +80,11 @@
 - `bash scripts/demo_dispatch.sh` was verified on port 8013: `/health` 200, `/dispatch` 200.
 - The script resolves the conda env path directly (avoids `conda run` buffering) and converts Git Bash `PYTHONPATH` to a Windows path with `;` separators.
 - Port 8000 is occupied by an unrelated existing process; use `PORT=8010 bash scripts/demo_dispatch.sh` (the live verification used 8010).
+
+## Vue 3 · v1.2 · 2026-11-12
+
+- 新前端：`frontend/`，Vue 3 + TypeScript strict + Vite + Router + Pinia + Vue Query + Zod；`/dispatch` 由 FastAPI 托管 `frontend/dist`，旧单文件页保留在 `/dispatch/legacy`。
+- 信息架构：场景目录 10 阶段 + 控制塔、今日态势、阶段工作台；阶段结果来自 `GET /api/v1/dispatch/stages/{id}`。
+- 后端：阶段结果/目录、snapshot 导航/态势/审批进度、`/integrations`、`MockPlatformAdapter`、`AdapterRegistry`、`ControlService`。
+- 验证：后端 82 passed；Vitest 13 passed；Playwright 9 passed（Chrome channel）；1440/375 截图与 375 `scrollWidth === innerWidth` 通过。
+- P1 修复：旧页与 Vue 演示 toast 明确「只读投影，审批状态未改变」。
