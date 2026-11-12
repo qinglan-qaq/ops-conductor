@@ -62,6 +62,7 @@ def _approval_case(draft: ApprovalDraft) -> ApprovalCase:
         owner=draft.owner,
         impact=draft.impact,
         recommended=draft.recommended,
+        stage_id=draft.stage_id,
     )
 
 
@@ -133,21 +134,25 @@ class DispatchOrchestrator:
             results.append(result)
             steps.append(step)
             if result.approval is not None:
-                case = _approval_case(result.approval)
-                approvals_by_id[case.id] = case
+                draft_case = _approval_case(result.approval)
+                approvals_by_id[draft_case.id] = draft_case
 
         approvals: list[ApprovalCase] = []
         for approval_id in plan.approval_ids:
-            case = approvals_by_id.get(approval_id)
-            if case is None:
+            pending_case = approvals_by_id.get(approval_id)
+            if pending_case is None:
                 continue
             decision, actor = DEMO_DECISIONS[approval_id]
-            case.decide(decision, actor, self._clock.now_label())
+            pending_case.decide(decision, actor, self._clock.now_label())
             title = "审批通过" if decision is Decision.approve else "审批驳回"
             events.append(
-                TraceEvent(self._clock.now_label(), title, f"{case.title} · {actor}")
+                TraceEvent(
+                    self._clock.now_label(),
+                    title,
+                    f"{pending_case.title} · {actor}",
+                )
             )
-            approvals.append(case)
+            approvals.append(pending_case)
 
         verification = self._verifier.verify(results)
         veto_note = f"{len(verification.vetoed)} 项否决" if verification.vetoed else "无否决"

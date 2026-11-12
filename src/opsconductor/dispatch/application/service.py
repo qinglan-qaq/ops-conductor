@@ -427,6 +427,14 @@ class DispatchService:
         goal = self._repo.snapshot().goal
         return self._orchestrator.run(goal)
 
+    def is_approval_approved(self, approval_id: str) -> bool:
+        """返回指定审批案是否已批准；未知 ID 视为未批准。
+
+        该查询供控制写门禁使用，不向外暴露审批内容，也不产生写操作。
+        """
+        approval = self._repo.snapshot().approvals.get(approval_id)
+        return approval is not None and approval.status is ApprovalStatus.approved
+
     def get_exception(self, exception_id: str) -> ExceptionCase:
         """按 ID 返回异常用例。
 
