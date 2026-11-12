@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>跨境电商 · 统一台前调度｜三方向视觉板</title>
+<style>
+  :root{
+    --ink:#0d100e;
+    --ink-2:#121613;
+    --line:rgba(185,155,99,.28);
+    --gold:#b99b63;
+    --paper:#e9e3d5;
+    --muted:#938b7d;
+    --song:"Noto Serif SC","Source Han Serif SC","STSong","SimSun",serif;
+    --kai:"STKaiti","KaiTi","Kaiti SC",serif;
+    --fang:"STFangsong","FangSong","FangSong_GB2312",serif;
+    --sans:"Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif;
+    --mono:"JetBrains Mono",Consolas,"Courier New",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(1200px 500px at 50% -10%,rgba(185,155,99,.08),transparent 65%),
+      var(--ink);
+    color:var(--paper);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+  }
+  .grain{
+    position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.05;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
+  }
+  .sheet{
+    position:relative;z-index:1;
+    width:1440px;margin:0 auto;padding:40px 44px 34px;
+  }
+  header{
+    display:flex;align-items:flex-end;justify-content:space-between;
+    padding-bottom:22px;border-bottom:1px solid var(--line);
+  }
+  .kicker{
+    display:flex;align-items:center;gap:12px;
+    color:var(--gold);font-family:var(--kai);font-size:13px;letter-spacing:.14em;
+  }
+  .kicker::before{content:"";width:34px;height:1px;background:var(--gold);opacity:.7}
+  h1{
+    margin:12px 0 8px;font-family:var(--song);font-weight:600;
+    font-size:40px;line-height:1.18;letter-spacing:.06em;
+  }
+  .sub{
+    margin:0;color:var(--muted);font-size:13px;line-height:1.8;
+  }
+  .head-right{display:flex;align-items:flex-start;gap:18px}
+  .seal{
+    width:52px;height:52px;border:1px solid currentColor;
+    display:grid;place-items:center;font-family:var(--song);
+    font-size:24px;line-height:1;transform:rotate(2deg);
+    color:var(--gold);position:relative;
+  }
+  .seal::after{content:"";position:absolute;inset:4px;border:1px solid currentColor;opacity:.35}
+  .head-note{
+    text-align:right;color:var(--muted);font-size:12px;line-height:1.9;
+  }
+  .head-note strong{display:block;color:var(--paper);font-weight:500;font-size:13px}
+
+  .board{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:18px;
+    margin-top:28px;align-items:stretch;
+  }
+  .roll{
+    display:flex;flex-direction:column;min-width:0;
+    border:1px solid var(--line);background:var(--ink-2);
+    box-shadow:0 24px 60px rgba(0,0,0,.35);
+  }
+  .roll__head{
+    padding:16px 18px 14px;border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:flex-start;gap:10px;
+  }
+  .roll__name{font-family:var(--song);font-size:20px;letter-spacing:.06em;line-height:1.3}
+  .roll__index{
+    color:var(--gold);font-family:var(--kai);font-size:12px;letter-spacing:.2em;
+    margin-bottom:5px;
+  }
+  .roll__tag{
+    flex:0 0 auto;color:var(--muted);font-size:11px;line-height:1.6;text-align:right;
+    max-width:110px;
+  }
+  .roll__tag em{
+    display:inline-block;font-style:normal;color:var(--gold);
+    border:1px solid rgba(185,155,99,.45);padding:1px 6px;margin-bottom:4px;
+    font-family:var(--kai);letter-spacing:.12em;
+  }
+  .mock{
+    position:relative;height:360px;overflow:hidden;
+    border-bottom:1px solid var(--line);
+  }
+  .mock-label{
+    position:absolute;left:12px;bottom:10px;z-index:3;
+    font-family:var(--kai);font-size:10px;letter-spacing:.18em;opacity:.55;
+    writing-mode:vertical-rl;
+  }
+
+  /* ============ 卷一 · 朱墨案牍 ============ */
+  .mock--zhumo{
+    background:#f7f3e9;color:#17130f;
+    font-family:var(--song);
+    padding:16px 15px 14px;
+  }
+  .zm-top{
+    display:flex;justify-content:space-between;align-items:center;
+    border-bottom:2px solid #17130f;padding-bottom:8px;
+  }
+  .zm-store{font-family:var(--fang);font-size:12px;letter-spacing:.06em}
+  .zm-store b{font-family:var(--song);font-weight:600;font-size:14px;letter-spacing:.04em}
+  .zm-seal{
+    width:26px;height:26px;border:1.5px solid #a8342a;color:#a8342a;
+    display:grid;place-items:center;font-family:var(--kai);font-size:14px;
+    transform:rotate(-3deg);
+  }
+  .zm-goal{
+    display:flex;gap:10px;align-items:baseline;
+    padding:10px 0 10px;border-bottom:1px solid rgba(23,19,15,.25);
+  }
+  .zm-goal .verb{
+    flex:0 0 auto;font-family:var(--kai);font-size:13px;color:#a8342a;
+    border:1px solid #a8342a;padding:0 5px;line-height:1.6;
+  }
+  .zm-goal p{margin:0;font-size:13px;line-height:1.65;letter-spacing:.01em}
+  .zm-goal b{font-weight:600}
+  .zm-cols{display:grid;grid-template-columns:1.04fr .92fr 1.04fr;gap:0;margin-top:11px}
+  .zm-col{padding:0 10px;min-width:0}
+  .zm-col:first-child{padding-left:0}
+  .zm-col:last-child{padding-right:0}
+  .zm-col + .zm-col{border-left:1px solid rgba(23,19,15,.22)}
+  .zm-label{
+    font-family:var(--kai);font-size:10px;letter-spacing:.18em;color:#2c4a56;
+    display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;
+  }
+  .zm-label span:last-child{font-family:var(--mono);font-size:8px;color:#8a7f6c;letter-spacing:0}
+  .zm-row{
+    display:flex;align-items:center;gap:6px;
+    font-family:var(--fang);font-size:11px;line-height:1.5;
+    padding:4px 0;border-bottom:1px dotted rgba(23,19,15,.18);
+  }
+  .zm-row:last-child{border-bottom:0}
+  .zm-dot{width:5px;height:5px;flex:0 0 auto;background:#2c4a56}
+  .zm-dot.red{background:#a8342a}
+  .zm-dot.hollow{background:transparent;border:1px solid #17130f}
+  .zm-row .r{margin-left:auto;font-family:var(--mono);font-size:8.5px;color:#6e6556;white-space:nowrap}
+  .zm-chain{margin-top:2px}
+  .zm-chain div{
+    position:relative;font-family:var(--fang);font-size:10.5px;line-height:1.9;
+    padding-left:11px;color:#3d362b;white-space:nowrap;
+  }
+  .zm-chain div::before{
+    content:"";position:absolute;left:0;top:.82em;width:5px;height:5px;
+    border:1px solid #17130f;background:#f7f3e9;
+  }
+  .zm-chain div::after{
+    content:"";position:absolute;left:2px;top:1.55em;width:1px;height:.9em;
+    background:rgba(23,19,15,.3);
+  }
+  .zm-chain div:last-child::after{display:none}
+  .zm-chain div:first-child::before{background:#a8342a;border-color:#a8342a}
+  .zm-chain .more{
+    margin-top:5px;padding-left:0;font-family:var(--kai);font-size:8.5px;
+    color:#7b7160;letter-spacing:.08em;line-height:1.5;white-space:normal;
+  }
+  .zm-chain .more::before,.zm-chain .more::after{display:none}
+  .zm-bottom{
+    display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:8px;
+    border-top:1px solid rgba(23,19,15,.22);
+    font-family:var(--fang);font-size:10px;color:#4d4538;
+  }
+  .zm-bottom span{border:1px solid rgba(23,19,15,.25);padding:1px 4px;background:rgba(255,255,255,.35)}
+  .zm-bottom span.hot{color:#a8342a;border-color:rgba(168,52,42,.45)}
+
+  /* ============ 卷二 · 绢本青绿 ============ */
+  .mock--juanben{
+    background:
+      linear-gradient(90deg,rgba(120,96,58,.08) 1px,transparent 1px) 0 0/46px 100%,
+      linear-gradient(0deg,rgba(120,96,58,.05) 1px,transparent 1px) 0 0/100% 34px,
+      radial-gradient(120% 90% at 20% 0%,#f7f0df 0%,#f1e8d6 55%,#e9ddc6 100%);
+    color:#1c241f;padding:16px 15px 16px 66px;
+  }
+  .jb-title{
+    position:absolute;left:17px;top:18px;writing-mode:vertical-rl;
+    font-family:var(--song);font-size:19px;letter-spacing:.28em;line-height:1.35;
+    color:#1c241f;
+  }
+  .jb-title small{
+    display:block;font-family:var(--kai);font-size:8.5px;letter-spacing:.16em;
+    color:#4f7a66;margin-top:10px;
+  }
+  .jb-seal{
+    position:absolute;left:18px;bottom:20px;width:28px;height:28px;
+    border:1.5px solid #b4452f;color:#b4452f;display:grid;place-items:center;
+    font-family:var(--kai);font-size:14px;transform:rotate(2deg);opacity:.9;
+  }
+  .jb-top{
+    display:flex;justify-content:space-between;align-items:baseline;
+    border-bottom:1px solid rgba(28,36,31,.3);padding-bottom:7px;
+  }
+  .jb-top b{font-family:var(--song);font-weight:600;font-size:13px;letter-spacing:.06em}
+  .jb-top span{font-family:var(--fang);font-size:10px;color:#4f7a66}
+  .jb-path{position:relative;height:196px;margin-top:4px}
+  .jb-path svg{position:absolute;inset:0;width:100%;height:100%}
+  .jb-node{
+    position:absolute;transform:translate(-50%,-50%);
+    font-family:var(--fang);font-size:10px;line-height:1.3;
+    color:#1c241f;text-align:center;white-space:nowrap;
+  }
+  .jb-node i{
+    display:block;width:7px;height:7px;margin:0 auto 3px;border-radius:50%;
+    background:#f1e8d6;border:1.2px solid #335c6b;
+  }
+  .jb-node.hot i{background:#b4452f;border-color:#b4452f}
+  .jb-node.green i{background:#4f7a66;border-color:#4f7a66}
+  .jb-note{
+    position:absolute;font-family:var(--kai);font-size:9px;line-height:1.6;
+    color:#4f7a66;writing-mode:vertical-rl;letter-spacing:.12em;
+  }
+  .jb-notes{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    border-top:1px solid rgba(28,36,31,.3);padding-top:8px;margin-top:2px;
+  }
+  .jb-stats{display:flex;gap:16px}
+  .jb-stats div{font-family:var(--fang);font-size:9.5px;line-height:1.5;color:#5b5344}
+  .jb-stats b{
+    display:block;font-family:var(--song);font-weight:600;font-size:16px;
+    color:#1c241f;letter-spacing:.02em;
+  }
+  .jb-stats b em{font-style:normal;font-size:9px;color:#4f7a66;margin-left:2px}
+  .jb-caption{
+    font-family:var(--kai);font-size:9px;color:#6c6352;letter-spacing:.12em;
+    text-align:right;line-height:1.7;
+  }
+
+  /* ============ 卷三 · 玄金夜航 ============ */
+  .mock--xuanjin{
+    background:
+      radial-gradient(70% 60% at 50% 38%,rgba(127,167,154,.13),transparent 70%),
+      radial-gradient(120% 100% at 50% 120%,rgba(199,164,92,.1),transparent 60%),
+      #101512;
+    color:#e9e3d3;padding:14px 14px 12px;
+  }
+  .xj-top{
+    display:flex;justify-content:space-between;align-items:center;
+    border-bottom:1px solid rgba(199,164,92,.3);padding-bottom:7px;
+  }
+  .xj-top b{font-family:var(--song);font-weight:500;font-size:13px;letter-spacing:.14em;color:#d9d1bd}
+  .xj-top span{font-family:var(--mono);font-size:8.5px;color:#7fa79a;letter-spacing:.12em}
+  .xj-map{position:relative;height:206px;margin-top:2px}
+  .xj-map svg{position:absolute;inset:0;width:100%;height:100%}
+  .xj-center{
+    position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:62px;height:62px;border-radius:50%;
+    border:1px solid rgba(199,164,92,.75);
+    display:grid;place-items:center;text-align:center;
+    background:rgba(16,21,18,.88);
+    box-shadow:0 0 0 6px rgba(199,164,92,.05),0 0 32px rgba(199,164,92,.12);
+    z-index:2;
+  }
+  .xj-center b{font-family:var(--song);font-weight:500;font-size:12px;line-height:1.35;color:#e9e3d3;letter-spacing:.08em}
+  .xj-center small{display:block;font-family:var(--mono);font-size:7px;color:#c7a45c;letter-spacing:.08em;margin-top:2px}
+  .xj-agent{
+    position:absolute;transform:translate(-50%,-50%);
+    font-family:var(--fang);font-size:9.5px;line-height:1.25;color:#c9c2b1;
+    white-space:nowrap;text-align:center;z-index:2;
+  }
+  .xj-agent i{
+    display:block;width:5px;height:5px;border-radius:50%;margin:0 auto 3px;
+    background:#7fa79a;box-shadow:0 0 8px rgba(127,167,154,.8);
+  }
+  .xj-agent.hot i{background:#b4472f;box-shadow:0 0 8px rgba(180,71,47,.8)}
+  .xj-agent.gold i{background:#c7a45c;box-shadow:0 0 8px rgba(199,164,92,.75)}
+  .xj-side{
+    position:absolute;top:24px;font-family:var(--kai);font-size:8px;
+    letter-spacing:.16em;color:#7fa79a;writing-mode:vertical-rl;line-height:1.8;
+  }
+  .xj-side.left{left:1px}
+  .xj-side.right{right:1px;color:#c7a45c}
+  .xj-trace{
+    border-top:1px solid rgba(199,164,92,.28);padding-top:7px;margin-top:1px;
+    display:flex;align-items:center;gap:0;
+  }
+  .xj-trace span{
+    position:relative;flex:1;font-family:var(--mono);font-size:8px;color:#8e988f;
+    padding-top:8px;text-align:center;
+  }
+  .xj-trace span::before{
+    content:"";position:absolute;left:50%;top:0;width:4px;height:4px;
+    border-radius:50%;background:#7fa79a;
+  }
+  .xj-trace span:first-child::before{background:#c7a45c}
+  .xj-trace span:last-child::before{background:#b4472f}
+  .xj-trace span::after{
+    content:"";position:absolute;left:0;right:0;top:1.5px;height:1px;
+    background:rgba(199,164,92,.2);z-index:-1;
+  }
+  .xj-trace span:first-child::after{left:50%}
+  .xj-trace span:last-child::after{right:50%}
+
+  /* ============ 说明区 ============ */
+  .roll__body{padding:15px 18px 17px;display:flex;flex-direction:column;gap:13px;flex:1}
+  .swatches{display:flex;gap:0;border:1px solid rgba(185,155,99,.22)}
+  .swatch{flex:1;min-width:0;padding:0}
+  .swatch i{display:block;height:26px}
+  .swatch span{
+    display:block;padding:5px 5px 6px;font-family:var(--mono);font-size:8px;
+    color:var(--muted);line-height:1.35;border-top:1px solid rgba(185,155,99,.18);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .swatch span b{display:block;color:#cfc6b5;font-weight:500;font-size:8.5px}
+  .type-row{display:flex;align-items:baseline;justify-content:space-between;gap:10px;border-top:1px solid rgba(185,155,99,.18);padding-top:11px}
+  .type-sample{font-family:var(--song);font-size:21px;letter-spacing:.05em;color:#d9d1bd;white-space:nowrap}
+  .type-sample.kai{font-family:var(--kai);font-size:20px;color:#c7a45c}
+  .type-sample.fang{font-family:var(--fang);font-size:19px;color:#bfb7a6}
+  .type-name{font-size:9.5px;color:var(--muted);line-height:1.7;text-align:right}
+  .notes{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+  .notes li{
+    position:relative;padding-left:12px;font-size:11px;line-height:1.65;color:#a9a193;
+  }
+  .notes li::before{content:"";position:absolute;left:0;top:.66em;width:5px;height:1px;background:var(--gold);opacity:.65}
+  .notes li b{color:#d8d0bf;font-weight:500}
+  .verdict{
+    margin-top:auto;border-top:1px solid rgba(185,155,99,.2);padding-top:10px;
+    font-size:10.5px;line-height:1.7;color:#8f8779;
+  }
+  .verdict em{font-style:normal;color:var(--gold);font-family:var(--kai);letter-spacing:.08em}
+
+  footer{
+    display:flex;justify-content:space-between;align-items:flex-end;gap:24px;
+    margin-top:26px;padding-top:18px;border-top:1px solid var(--line);
+  }
+  footer p{margin:0;font-size:11px;line-height:1.8;color:var(--muted)}
+  footer p b{color:#cfc6b5;font-weight:500}
+  footer .choose{
+    flex:0 0 auto;font-family:var(--song);font-size:16px;letter-spacing:.08em;color:var(--paper);
+    border:1px solid rgba(185,155,99,.45);padding:9px 16px;
+  }
+  footer .choose span{color:var(--gold);font-family:var(--kai);font-size:13px;margin-left:8px}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<main class="sheet">
+  <header>
+    <div>
+      <div class="kicker">三卷 · 择一而定</div>
+      <h1>跨境电商 · 统一台前调度</h1>
+      <p class="sub">三种配色与版式方向。依据仓库现有全景流程图、四闭环、Agent 统筹图、80 条异常目录与 NestWell 演示剧本。非最终页面。</p>
+    </div>
+    <div class="head-right">
+      <div class="head-note">
+        <strong>三方向视觉板</strong>
+        1440 · 桌面首屏<br>每卷含配色 / 字体 / 迷你调度台
+      </div>
+      <div class="seal">择</div>
+    </div>
+  </header>
+
+  <section class="board">
+    <!-- 卷一 -->
+    <article class="roll">
+      <div class="roll__head">
+        <div>
+          <div class="roll__index">卷一 · 纸白朱墨</div>
+          <div class="roll__name">朱墨案牍 · 批阅台</div>
+        </div>
+        <div class="roll__tag"><em>推荐</em><br>审批 / 异常 / 责任链最清楚</div>
+      </div>
+
+      <div class="mock mock--zhumo">
+        <div class="mock-label">调度台 · 首屏示意</div>
+        <div class="zm-top">
+          <div class="zm-store"><b>NestWell Home US</b><br>美区 · 家居 · 1 号店</div>
+          <div class="zm-seal">值</div>
+        </div>
+
+        <div class="zm-goal">
+          <span class="verb">令</span>
+          <p>本周做到 <b>$100k GMV</b>，广告预算 <b>$10k</b>；优先处理断货与超时订单，ROAS 目标 <b>2.5</b>。</p>
+        </div>
+
+        <div class="zm-cols">
+          <div class="zm-col">
+            <div class="zm-label"><span>调度</span><span>08 AGENTS</span></div>
+            <div class="zm-row"><i class="zm-dot red"></i>订单 Agent<span class="r">P0</span></div>
+            <div class="zm-row"><i class="zm-dot"></i>履约 Agent<span class="r">进行</span></div>
+            <div class="zm-row"><i class="zm-dot"></i>内容 Agent<span class="r">5 SKU</span></div>
+            <div class="zm-row"><i class="zm-dot hollow"></i>定价 Agent<span class="r">待批</span></div>
+            <div class="zm-row"><i class="zm-dot"></i>结算 Agent<span class="r">对账</span></div>
+          </div>
+
+          <div class="zm-col">
+            <div class="zm-label"><span>链路</span><span>05 / 10</span></div>
+            <div class="zm-chain">
+              <div>选品 · 评分</div>
+              <div>内容 · Brief</div>
+              <div>上架 · 定价</div>
+              <div>订单 · 异常</div>
+              <div>履约 · 关务</div>
+              <div class="more">余：结算 / 售后 / 控制塔</div>
+            </div>
+          </div>
+
+          <div class="zm-col">
+            <div class="zm-label"><span>批</span><span>03 待办</span></div>
+            <div class="zm-row"><i class="zm-dot red"></i>广告预算 $10k<span class="r">L3</span></div>
+            <div class="zm-row"><i class="zm-dot hollow"></i>涨价建议<span class="r">L2</span></div>
+            <div class="zm-row"><i class="zm-dot red"></i>退款 $1,280<span class="r">L3</span></div>
+          </div>
+        </div>
+
+        <div class="zm-bottom">
+          <span class="hot">ORD-01 超时未发 · P0</span>
+          <span>INV-01 库存不足 · P1</span>
+          <span>LOG-03 扣关 · P1</span>
+        </div>
+      </div>
+
+      <div class="roll__body">
+        <div class="swatches">
+          <div class="swatch"><i style="background:#f7f3e9"></i><span><b>纸白 55%</b>#F7F3E9</span></div>
+          <div class="swatch"><i style="background:#17130f"></i><span><b>墨 30%</b>#17130F</span></div>
+          <div class="swatch"><i style="background:#a8342a"></i><span><b>朱砂 10%</b>#A8342A</span></div>
+          <div class="swatch"><i style="background:#2c4a56"></i><span><b>靛青 5%</b>#2C4A56</span></div>
+        </div>
+
+        <div class="type-row">
+          <div class="type-sample">调度台</div>
+          <div class="type-sample kai">朱批</div>
+          <div class="type-sample fang">案牍</div>
+          <div class="type-name">宋体标题<br>仿宋正文 · 楷体批注</div>
+        </div>
+
+        <ul class="notes">
+          <li><b>版刻栏线</b>划分令 / 调度 / 批三栏，信息不靠卡片堆叠。</li>
+          <li><b>朱砂只给决策</b>：风险、待批、否决；其余用墨与靛青。</li>
+          <li><b>印章与朱批</b>承担状态，审批链一眼可读，适合做统一台前。</li>
+        </ul>
+        <div class="verdict"><em>气质</em> 明代案牍 · 六部批阅 · 可审计的权威感</div>
+      </div>
+    </article>
+
+    <!-- 卷二 -->
+    <article class="roll">
+      <div class="roll__head">
+        <div>
+          <div class="roll__index">卷二 · 绢底青绿</div>
+          <div class="roll__name">绢本青绿 · 山河长卷</div>
+        </div>
+        <div class="roll__tag">最雅致<br>适合客户演示与叙事</div>
+      </div>
+
+      <div class="mock mock--juanben">
+        <div class="mock-label">手卷 · 首屏示意</div>
+        <div class="jb-title">台前调度<small>跨境 · 十段</small></div>
+        <div class="jb-seal">卷</div>
+
+        <div class="jb-top">
+          <b>今日 · 美区家居</b>
+          <span>Mock 演算 · 固定种子</span>
+        </div>
+
+        <div class="jb-path">
+          <svg viewBox="0 0 340 196" preserveAspectRatio="none" aria-hidden="true">
+            <path d="M18 52 C58 10, 86 10, 116 46 S174 110, 210 92 S268 34, 320 58"
+                  fill="none" stroke="#335c6b" stroke-width="1.1" opacity=".75"/>
+            <path d="M18 52 C58 10, 86 10, 116 46 S174 110, 210 92 S268 34, 320 58"
+                  fill="none" stroke="#4f7a66" stroke-width="5" opacity=".08"/>
+            <path d="M18 148 C62 176, 98 170, 128 142 S188 98, 226 116 S282 160, 322 140"
+                  fill="none" stroke="#4f7a66" stroke-width="1" opacity=".55" stroke-dasharray="3 4"/>
+            <circle cx="18" cy="52" r="2.4" fill="#b4452f"/>
+            <circle cx="116" cy="46" r="2.4" fill="#4f7a66"/>
+            <circle cx="210" cy="92" r="2.4" fill="#335c6b"/>
+            <circle cx="320" cy="58" r="2.4" fill="#b4452f"/>
+          </svg>
+
+          <div class="jb-node hot" style="left:5.3%;top:26.5%"><i></i>选品</div>
+          <div class="jb-node green" style="left:34.1%;top:23.5%"><i></i>内容</div>
+          <div class="jb-node" style="left:61.8%;top:46.9%"><i></i>上架 · 流量</div>
+          <div class="jb-node hot" style="left:94.1%;top:29.6%"><i></i>订单</div>
+          <div class="jb-node green" style="left:6%;top:75.5%"><i></i>履约</div>
+          <div class="jb-node" style="left:35%;top:72.4%"><i></i>关务</div>
+          <div class="jb-node" style="left:66.5%;top:59.2%"><i></i>结算</div>
+          <div class="jb-node" style="left:94.7%;top:71.4%"><i></i>控制塔</div>
+        </div>
+
+        <div class="jb-notes">
+          <div class="jb-stats">
+            <div><b>$100k<em>GMV</em></b>本周目标</div>
+            <div><b>6<em>单</em></b>异常队列</div>
+            <div><b>3<em>件</em></b>待批</div>
+          </div>
+          <div class="jb-caption">内容 · 定价 · 履约 · 结算<br>四闭环相生</div>
+        </div>
+      </div>
+
+      <div class="roll__body">
+        <div class="swatches">
+          <div class="swatch"><i style="background:#f1e8d6"></i><span><b>绢底 60%</b>#F1E8D6</span></div>
+          <div class="swatch"><i style="background:#1c241f"></i><span><b>墨 25%</b>#1C241F</span></div>
+          <div class="swatch"><i style="background:#4f7a66"></i><span><b>石绿 10%</b>#4F7A66</span></div>
+          <div class="swatch"><i style="background:#335c6b"></i><span><b>石青 4%</b>#335C6B</span></div>
+          <div class="swatch"><i style="background:#b4452f"></i><span><b>朱砂 1%</b>#B4452F</span></div>
+        </div>
+
+        <div class="type-row">
+          <div class="type-sample">山河</div>
+          <div class="type-sample fang">长卷</div>
+          <div class="type-sample kai">题签</div>
+          <div class="type-name">思源宋体标题<br>仿宋注释 · 楷体题签</div>
+        </div>
+
+        <ul class="notes">
+          <li><b>横向手卷</b>承载十段链路，像看一幅运营山河图。</li>
+          <li><b>大面积留白</b>给数字与异常，密度低，叙事感强。</li>
+          <li><b>青绿为骨、朱砂为眼</b>，只有风险与关键节点用红。</li>
+        </ul>
+        <div class="verdict"><em>气质</em> 宋人青绿 · 手卷题跋 · 雅致而有呼吸感</div>
+      </div>
+    </article>
+
+    <!-- 卷三 -->
+    <article class="roll">
+      <div class="roll__head">
+        <div>
+          <div class="roll__index">卷三 · 玄墨鎏金</div>
+          <div class="roll__name">玄金夜航 · 控制塔</div>
+        </div>
+        <div class="roll__tag">大屏气场<br>最适合统一调度演示</div>
+      </div>
+
+      <div class="mock mock--xuanjin">
+        <div class="mock-label">星图 · 首屏示意</div>
+        <div class="xj-top">
+          <b>夜航调度 · NestWell US</b>
+          <span>MOCK / 10:42</span>
+        </div>
+
+        <div class="xj-map">
+          <div class="xj-side left">十段链路<br>选品 内容 上架 流量 订单<br>履约 关务 结算 售后 控制塔</div>
+          <div class="xj-side right">待批 03<br>异常 06</div>
+          <svg viewBox="0 0 340 206" preserveAspectRatio="none" aria-hidden="true">
+            <g stroke="#c7a45c" stroke-width=".7" opacity=".45">
+              <line x1="170" y1="103" x2="170" y2="30"/>
+              <line x1="170" y1="103" x2="238" y2="52"/>
+              <line x1="170" y1="103" x2="252" y2="103"/>
+              <line x1="170" y1="103" x2="238" y2="154"/>
+              <line x1="170" y1="103" x2="170" y2="176"/>
+              <line x1="170" y1="103" x2="102" y2="154"/>
+              <line x1="170" y1="103" x2="88" y2="103"/>
+              <line x1="170" y1="103" x2="102" y2="52"/>
+            </g>
+            <circle cx="170" cy="103" r="52" fill="none" stroke="#c7a45c" stroke-width=".5" opacity=".25" stroke-dasharray="2 4"/>
+            <circle cx="170" cy="103" r="76" fill="none" stroke="#c7a45c" stroke-width=".4" opacity=".16"/>
+            <circle cx="170" cy="103" r="5" fill="#c7a45c" opacity=".9"/>
+          </svg>
+
+          <div class="xj-center"><div><b>台前<br>调度</b><small>ORCH</small></div></div>
+
+          <div class="xj-agent gold" style="left:50%;top:10.5%"><i></i>选品</div>
+          <div class="xj-agent" style="left:72.5%;top:22.5%"><i></i>内容</div>
+          <div class="xj-agent" style="left:77%;top:50%"><i></i>定价</div>
+          <div class="xj-agent" style="left:72.5%;top:77.5%"><i></i>投放</div>
+          <div class="xj-agent hot" style="left:50%;top:89.5%"><i></i>订单</div>
+          <div class="xj-agent" style="left:27.5%;top:77.5%"><i></i>履约</div>
+          <div class="xj-agent gold" style="left:22.5%;top:50%"><i></i>结算</div>
+          <div class="xj-agent" style="left:27.5%;top:22.5%"><i></i>合规</div>
+        </div>
+
+        <div class="xj-trace">
+          <span>10:42 计划</span><span>10:45 审批</span><span>11:02 执行</span><span>11:08 验证</span><span>11:12 归因</span>
+        </div>
+      </div>
+
+      <div class="roll__body">
+        <div class="swatches">
+          <div class="swatch"><i style="background:#101512"></i><span><b>玄墨 65%</b>#101512</span></div>
+          <div class="swatch"><i style="background:#1c2a25"></i><span><b>铜青 20%</b>#1C2A25</span></div>
+          <div class="swatch"><i style="background:#c7a45c"></i><span><b>鎏金 10%</b>#C7A45C</span></div>
+          <div class="swatch"><i style="background:#7fa79a"></i><span><b>玉青 5%</b>#7FA79A</span></div>
+          <div class="swatch"><i style="background:#b4472f"></i><span><b>朱砂 点</b>#B4472F</span></div>
+        </div>
+
+        <div class="type-row">
+          <div class="type-sample">夜航</div>
+          <div class="type-sample kai">星图</div>
+          <div class="type-sample" style="font-family:var(--mono);font-size:18px">$100k</div>
+          <div class="type-name">明朝体标题<br>仿宋节点 · 等宽数字</div>
+        </div>
+
+        <ul class="notes">
+          <li><b>星图式布局</b>把 Orchestrator 放在中心，八个 Agent 围绕。</li>
+          <li><b>金线只画关系</b>，玉青只标数据，朱砂只标风险，克制发光。</li>
+          <li><b>暗底大屏</b>最有控制塔气场，适合现场演示与录屏。</li>
+        </ul>
+        <div class="verdict"><em>气质</em> 夜航船 · 钦天监 · 铜镜星盘的静默掌控</div>
+      </div>
+    </article>
+  </section>
+
+  <footer>
+    <p><b>依据</b>：SPEC §6 主链路 / §7 四闭环 / §9 Agent；运营异常指南 §1 全景流程、§4 定级、§5 异常目录；模拟演示 §2 NestWell 剧本、§11 控制台；Agent 统筹 §2。<br>
+    <b>数据说明</b>：页面内数字均取自仓库演示剧本与 Mock 规格，不代表真实经营数据。</p>
+    <div class="choose">回复 一 / 二 / 三<span>选定后生成完整页面</span></div>
+  </footer>
+</main>
+</body>
+</html>
