@@ -1,0 +1,30 @@
+:root {
+  --paper: #f7f3e9;
+  --paper-raised: #fbf8f0;
+  --paper-deep: #efe7d6;
+  --ink: #17130f;
+  --ink-soft: #453b32;
+  --ink-mute: #786a5a;
+  --red: #a8342a;
+  --red-deep: #7e241d;
+  --red-soft: #f2e2de;
+  --indigo: #2c4a56;
+  --indigo-soft: #e3ebe8;
+  --gold: #a8894f;
+  --gold-soft: #f1e7d0;
+  --line: #d8cdb9;
+  --line-strong: #b8aa93;
+  --verdigris: #4f6f60;
+  --white: #fffdf7;
+
+  --serif: 'Songti SC', 'STSong', 'Noto Serif SC', 'SimSun', serif;
+  --fangsong: 'FangSong', 'STFangsong', 'Noto Serif SC', serif;
+  --kai: 'KaiTi', 'STKaiti', 'Kaiti SC', serif;
+  --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+
+  --sidebar-width: 260px;
+  --topbar-height: 78px;
+  --content-max: 1440px;
+  --shadow-paper: 0 1px 0 rgba(23, 19, 15, 0.08), 0 12px 30px rgba(23, 19, 15, 0.04);
+  --shadow-drawer: -18px 0 50px rgba(23, 19, 15, 0.18);
+}
