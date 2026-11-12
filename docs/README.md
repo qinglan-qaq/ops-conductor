@@ -41,6 +41,7 @@
 | [MVP 实施计划](plans/2026-11-04-mvp-order-exception-implementation.md) | 订单异常 3 周任务级 TDD 计划 | 待执行 |
 | [JD 对齐实施计划](plans/2026-11-04-jd-alignment-implementation.md) | ERP Adapter、SKILL、Memory、RAG、RPA、多模型任务级计划 | 待执行 |
 | [跨境电商台前调度 Demo 实施计划](plans/2026-11-12-cross-border-dispatch-demo.md) | 领域/应用/适配分层、FastAPI、TDD 与端到端冒烟 | 已执行 |
+| [台前调度导航、阶段工作台与平台集成扩展设计](specs/2026-11-12-dispatch-console-enhancement-design.md) | 侧边栏、首页态势、Vue 前端、阶段工作台、平台控制/数据接口与聚水潭/TikTok/Amazon/Google Trends 示例 | 已确认，待实现 |
 | [3 分钟演示脚本](demo-script.md) | MVP 主流程演示、演示账号与故障注入 | 可用 |
 | [Known Gaps](KNOWN_GAPS.md) | 5 条 xfail 的原因、影响与后续计划 | 已记录 |
 | [交付状态](delivery-status.md) | 测试基线、文档字符串覆盖与验证结果 | 已交付 |
