@@ -17,6 +17,8 @@ from opsconductor.api.routes.approvals import router as approvals_router
 from opsconductor.api.routes.console import router as console_router
 from opsconductor.api.routes.tasks import router as tasks_router
 from opsconductor.config import get_settings
+from opsconductor.dispatch.adapters.api import router as dispatch_api_router
+from opsconductor.dispatch.adapters.page import router as dispatch_page_router
 
 app = FastAPI(
     title="OpsConductor",
@@ -27,6 +29,8 @@ app = FastAPI(
 app.include_router(tasks_router)
 app.include_router(approvals_router)
 app.include_router(console_router)
+app.include_router(dispatch_api_router)
+app.include_router(dispatch_page_router)
 
 
 @app.get("/health", tags=["system"])
