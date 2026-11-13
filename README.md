@@ -25,7 +25,7 @@ PORT=8010 bash scripts/demo_dispatch.sh
 # http://127.0.0.1:8010/dispatch
 ```
 
-页面提供场景目录（10 阶段 + 控制塔）、今日态势、阶段工作台（Agent 摘要/产物/指标/证据/来源）、审批、异常 playbook 与平台集成健康。前端开发用 `cd frontend && npm run dev`（Vite 代理 `/api` 到 8010）；测试命令见 [前端说明](frontend/README.md)。
+页面提供场景目录（10 阶段 + 控制塔）、今日态势、经营可视化（销售额/Agent 使用量/结果交付）、阶段工作台（Agent 摘要/产物/指标/证据/来源）、审批、异常 playbook 与平台集成健康。前端开发用 `cd frontend && npm run dev`（Vite 代理 `/api` 到 8010）；测试命令见 [前端说明](frontend/README.md)。
 
 平台控制与数据获取已按 canonical model + `CommerceDataPort` / `PlatformControlPort` / AdapterRegistry 预留；本期只实现 `MockPlatformAdapter`，真实同步与控制写端点未启用。
 

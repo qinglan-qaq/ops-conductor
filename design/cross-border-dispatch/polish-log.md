@@ -88,3 +88,9 @@
 - 后端：阶段结果/目录、snapshot 导航/态势/审批进度、`/integrations`、`MockPlatformAdapter`、`AdapterRegistry`、`ControlService`。
 - 验证：后端 82 passed；Vitest 13 passed；Playwright 9 passed（Chrome channel）；1440/375 截图与 375 `scrollWidth === innerWidth` 通过。
 - P1 修复：旧页与 Vue 演示 toast 明确「只读投影，审批状态未改变」。
+
+## 经营可视化 · 2026-11-12
+
+- 新增 `InsightBoard`：销售额 SVG 折线/面积图、Agent 使用量横向条形图、10 阶段结果交付图。
+- 数据来自 snapshot `analytics`，明确标注 `MOCK`；阶段结果与 `STAGE_RESULTS` 同源。
+- 交互：点击 Agent 柱筛选 Agent 列表，点击结果柱进入阶段工作台；375 单列无横向溢出。

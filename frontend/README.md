@@ -36,7 +36,7 @@ E2E 使用本机 Chrome（`channel: 'chrome'`），不下载 Playwright 浏览�
 | `src/queries/` | Vue Query 缓存与 mutation |
 | `src/stores/` | Pinia 纯客户端 UI 状态 |
 | `src/components/layout/` | AppShell、Topbar、Sidebar |
-| `src/features/` | overview / stage / approvals / exceptions / integrations / trace |
+| `src/features/` | overview（态势 + 经营图表）/ stage / approvals / exceptions / integrations / trace |
 | `src/styles/` | 朱墨 tokens 与响应式布局 |
 | `src/tests/unit/` | Vitest + Vue Test Utils |
 | `e2e/` | Playwright 冒烟、375 抽屉与截图 |

@@ -75,3 +75,4 @@
 - 2026-11-11：新增 [归因/持久化/Skill/SOP/飞轮设计](specs/2026-11-11-agent-attribution-persistence-flywheel-design.md)、[Orchestrator Skill](skills/ecommerce-operations-orchestrator/SKILL.md) 与 [跨境运营 SOP](sop/2026-11-11-cross-border-operations-sop.md)。
 - 2026-11-11：新增 [总规格 SPEC.md（审查稿）](../SPEC.md)，整合业务链路、六平面架构、Agent 协作、归因/持久化/Skill/SOP/飞轮、验收与 ADR。
 - 2026-11-12：完成台前调度台 v1.2：阶段结果/详情与集成 API、MockPlatformAdapter/ControlService、Vue 3 场景目录与阶段工作台、Vue 静态托管与 Playwright 冒烟；见 [v1.2 实施计划](plans/2026-11-12-dispatch-console-v1.2.md)。
+- 2026-11-12：新增首页经营可视化：近 7 日销售额、Agent 使用量/成功率、阶段结果交付；全部图表使用朱墨自绘样式并标注 Mock 数据。

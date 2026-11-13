@@ -30,6 +30,7 @@ cd frontend && npm run dev   # http://127.0.0.1:5173/dispatch
 
 - **场景目录**：10 个运营阶段 + 控制塔，按电商顺序分组；每组 4–5 个子流程，支持折叠、状态点、待批/异常计数、URL 深链。
 - **今日态势**：审批进度、十段链路矩阵、8 个 Agent 状态、P0–P3 异常分布、平台集成健康。
+- **经营可视化**：近 7 日销售额、Agent 使用量/成功率、阶段结果交付；点击 Agent 柱筛选，点击阶段柱进入工作台。
 - **阶段工作台**：流程步骤、Agent 产出（摘要/产物/指标/证据/来源）、本阶段审批/异常/上下文。
 - **审批案 / 异常簿 / 平台集成**：批阅、playbook 抽屉、capability 清单与 freshness。
 - **移动端**：375 抽屉目录，页面无横向滚动。
@@ -61,6 +62,11 @@ E2E_BASE_URL=http://127.0.0.1:8010 npm run test:e2e
 | 适配层 | `src/opsconductor/dispatch/adapters/` | 内存仓储、Mock 工具、MockPlatformAdapter、JSON 序列化、FastAPI 路由、Vue/legacy 静态页、依赖组装 |
 
 设计模式：端口-适配器、仓储、策略、工厂、状态机、门面、observer 式 trace、依赖注入、Adapter Registry。审批重复裁决返回 409，未知阶段/审批/异常返回 404，所有写操作追加 trace。
+
+## 数据边界
+
+- 经营图表标注 `MOCK`：销售额、Agent 调用量与成功率为确定性演示数据，不接真实 BI/广告/销售系统。
+- 阶段结果交付直接从 `STAGE_RESULTS` 聚合，与阶段工作台同源。
 
 ## 平台边界
 
