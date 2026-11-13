@@ -1,0 +1,1 @@
+import{d as a,o as t,c as n,h as s,t as o}from"./index-dgBkID8r.js";const i=a({__name:"Seal",props:{text:{},tone:{default:"pending"}},setup(e){return(r,l)=>(t(),n("span",{class:s(["seal",`seal--${e.tone}`]),"aria-hidden":"true"},o(e.text),3))}});export{i as _};

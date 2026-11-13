@@ -1,0 +1,1 @@
+import{d as t,c as n,h as c,t as i,f as e,o as p}from"./index-dgBkID8r.js";const _=t({__name:"RiskBadge",props:{risk:{}},setup(a){const s=a,o=e(()=>`risk-${s.risk.toLowerCase()}`),r=e(()=>s.risk==="L3"?"L3 人工":s.risk);return(l,k)=>(p(),n("span",{class:c(["risk-badge",o.value])},i(r.value),3))}});export{_};

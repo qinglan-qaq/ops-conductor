@@ -12,6 +12,7 @@ import {
 import { useUiStore } from '@/stores/ui'
 import { useToast } from '@/composables/useToast'
 import StatusBoard from './StatusBoard.vue'
+import InsightBoard from './InsightBoard.vue'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import RiskBadge from '@/components/ui/RiskBadge.vue'
 import TraceTimeline from '@/features/trace/TraceTimeline.vue'
@@ -148,6 +149,8 @@ function resetDemo(): void {
     </section>
 
     <StatusBoard :snapshot="snapshot" :integrations="integrations" />
+
+    <InsightBoard :analytics="snapshot.analytics" />
 
     <div class="overview-grid">
       <section id="agents" class="panel">
