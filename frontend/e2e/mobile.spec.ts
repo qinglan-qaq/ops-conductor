@@ -12,6 +12,8 @@ test('mobile has no horizontal overflow and the catalog is a drawer', async ({
 }) => {
   await page.goto('/dispatch')
   await expect(page.getByText('后端已连接')).toBeVisible()
+  await expect(page.locator('[data-insight-board]')).toBeVisible()
+  await expect(page.locator('[data-sales-point]')).toHaveCount(7)
 
   const widths = await page.evaluate(() => ({
     inner: window.innerWidth,

@@ -16,6 +16,23 @@ test('overview shows backend status, scenario catalog and status board', async (
   await expect(page.locator('[data-chain-stage]')).toHaveCount(10)
   await expect(page.locator('[data-agent-id]')).toHaveCount(8)
   await expect(page.getByText('NestWell Home US').first()).toBeVisible()
+
+  await expect(page.locator('[data-insight-board]')).toBeVisible()
+  await expect(page.locator('[data-sales-point]')).toHaveCount(7)
+  await expect(page.locator('[data-agent-usage]')).toHaveCount(8)
+  await expect(page.locator('[data-result-stage]')).toHaveCount(10)
+  await expect(page.locator('[data-sales-chart]')).toContainText('$99,600')
+})
+
+test('insight charts filter agents and open stage results', async ({ page }) => {
+  await page.goto('/dispatch')
+
+  await page.locator('[data-agent-usage="order"]').click()
+  await expect(page.getByText('已筛选 order')).toBeVisible()
+
+  await page.locator('[data-result-stage="order"]').click()
+  await expect(page).toHaveURL(/\/dispatch\/stages\/order$/)
+  await expect(page.locator('[data-stage-result]')).toContainText('分类 6 单异常')
 })
 
 test('order stage shows agent result, artifacts and source', async ({ page }) => {
