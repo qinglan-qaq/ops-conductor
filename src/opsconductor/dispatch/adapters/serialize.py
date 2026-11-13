@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from opsconductor.dispatch.application.analytics import AnalyticsSnapshot
 from opsconductor.dispatch.application.integrations import AdapterRegistry
 from opsconductor.dispatch.application.orchestrator import DemoRunReport
 from opsconductor.dispatch.application.service import (
@@ -367,6 +368,52 @@ def integrations_payload(registry: AdapterRegistry) -> dict[str, Any]:
     }
 
 
+def analytics_payload(analytics: AnalyticsSnapshot) -> dict[str, Any]:
+    """序列化销售额、Agent 使用量与返回结果图表数据。"""
+    return {
+        "source": analytics.source,
+        "sales": {
+            "points": [
+                {
+                    "date": point.date,
+                    "amount_usd": point.amount_usd,
+                    "target_usd": point.target_usd,
+                }
+                for point in analytics.sales.points
+            ],
+            "total_usd": analytics.sales.total_usd,
+            "target_usd": analytics.sales.target_usd,
+            "daily_target_usd": analytics.sales.daily_target_usd,
+        },
+        "agent_usage": [
+            {
+                "agent_id": usage.agent_id,
+                "name": usage.name,
+                "runs": usage.runs,
+                "success_rate": usage.success_rate,
+                "avg_duration_ms": usage.avg_duration_ms,
+            }
+            for usage in analytics.agent_usage
+        ],
+        "results": {
+            "stages": [
+                {
+                    "stage_id": stage.stage_id,
+                    "name": stage.name,
+                    "status": stage.status.value,
+                    "artifact_count": stage.artifact_count,
+                    "evidence_count": stage.evidence_count,
+                }
+                for stage in analytics.results.stages
+            ],
+            "total_results": analytics.results.total_results,
+            "artifact_count": analytics.results.artifact_count,
+            "evidence_count": analytics.results.evidence_count,
+            "alert_stages": analytics.results.alert_stages,
+        },
+    }
+
+
 def snapshot_payload(snapshot: DispatchSnapshot) -> dict[str, Any]:
     """序列化前端一次性渲染所需的完整快照。"""
     return {
@@ -387,6 +434,7 @@ def snapshot_payload(snapshot: DispatchSnapshot) -> dict[str, Any]:
         ],
         "status_summary": status_summary_payload(snapshot.status_summary),
         "approval_progress": approval_progress_payload(snapshot.approval_progress),
+        "analytics": analytics_payload(snapshot.analytics),
     }
 
 
@@ -405,6 +453,7 @@ __all__ = [
     "AGENT_STATUS_LABELS",
     "agent_payload",
     "agent_status_label",
+    "analytics_payload",
     "approval_payload",
     "approval_progress_payload",
     "artifact_payload",

@@ -10,6 +10,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from opsconductor.dispatch.application.analytics import (
+    AnalyticsSnapshot,
+    build_analytics,
+)
 from opsconductor.dispatch.application.orchestrator import DemoRunReport, DispatchOrchestrator
 from opsconductor.dispatch.application.seed import (
     build_approvals,
@@ -137,6 +141,7 @@ class DispatchSnapshot:
     navigation: tuple[StageNavigation, ...]
     status_summary: StatusSummary
     approval_progress: ApprovalProgress
+    analytics: AnalyticsSnapshot
 
 
 class DispatchService:
@@ -177,6 +182,7 @@ class DispatchService:
             navigation=self._navigation(state, progress),
             status_summary=self._status_summary(state, progress),
             approval_progress=progress,
+            analytics=build_analytics(state),
         )
 
     def get_stage_detail(self, stage_id: str) -> StageDetail:
@@ -448,6 +454,7 @@ class DispatchService:
         raise ExceptionNotFound(f"unknown exception: {exception_id}")
 
 __all__ = [
+    "AnalyticsSnapshot",
     "ApprovalProgress",
     "DispatchService",
     "DispatchSnapshot",

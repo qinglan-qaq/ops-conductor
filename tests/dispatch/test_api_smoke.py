@@ -94,6 +94,7 @@ def test_snapshot_payload_is_plain_json_and_matches_frontend_shape(client):
         "navigation",
         "status_summary",
         "approval_progress",
+        "analytics",
     }
     assert set(data["goal"]) == GOAL_FIELDS
     assert set(data["kpis"]) == KPI_FIELDS
@@ -319,6 +320,23 @@ def test_snapshot_exposes_navigation_status_and_approval_progress(client):
         "l2_total": 1,
         "l3_total": 2,
     }
+
+
+def test_snapshot_exposes_mock_analytics(client):
+    analytics = client.get(SNAPSHOT).json()["analytics"]
+
+    assert analytics["source"] == "mock"
+    assert len(analytics["sales"]["points"]) == 7
+    assert analytics["sales"]["total_usd"] == 99_600
+    assert analytics["sales"]["target_usd"] == 100_000
+    assert len(analytics["agent_usage"]) == 8
+    assert analytics["agent_usage"][0]["agent_id"] == "selection"
+    assert analytics["agent_usage"][0]["runs"] == 24
+    assert analytics["results"]["total_results"] == 10
+    assert analytics["results"]["artifact_count"] == 20
+    assert analytics["results"]["evidence_count"] == 20
+    assert analytics["results"]["alert_stages"] == 2
+    assert len(analytics["results"]["stages"]) == 10
 
 
 def test_stage_detail_endpoint_returns_agent_output(client):
