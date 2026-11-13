@@ -186,6 +186,50 @@ export const StatusSummarySchema = z.object({
   exceptions: z.record(z.number()),
 })
 
+export const SalesPointSchema = z.object({
+  date: z.string(),
+  amount_usd: z.number(),
+  target_usd: z.number(),
+})
+
+export const SalesAnalyticsSchema = z.object({
+  points: z.array(SalesPointSchema),
+  total_usd: z.number(),
+  target_usd: z.number(),
+  daily_target_usd: z.number(),
+})
+
+export const AgentUsageSchema = z.object({
+  agent_id: z.string(),
+  name: z.string(),
+  runs: z.number(),
+  success_rate: z.number(),
+  avg_duration_ms: z.number(),
+})
+
+export const ResultDeliveryStageSchema = z.object({
+  stage_id: z.string(),
+  name: z.string(),
+  status: StageStatusSchema,
+  artifact_count: z.number(),
+  evidence_count: z.number(),
+})
+
+export const ResultDeliverySchema = z.object({
+  stages: z.array(ResultDeliveryStageSchema),
+  total_results: z.number(),
+  artifact_count: z.number(),
+  evidence_count: z.number(),
+  alert_stages: z.number(),
+})
+
+export const AnalyticsSchema = z.object({
+  source: z.string(),
+  sales: SalesAnalyticsSchema,
+  agent_usage: z.array(AgentUsageSchema),
+  results: ResultDeliverySchema,
+})
+
 export const SnapshotSchema = z.object({
   goal: GoalSchema,
   kpis: KpiSchema,
@@ -199,6 +243,7 @@ export const SnapshotSchema = z.object({
   navigation: z.array(NavigationSchema),
   status_summary: StatusSummarySchema,
   approval_progress: ApprovalProgressSchema,
+  analytics: AnalyticsSchema,
 })
 
 export const StageDetailSchema = StageDefinitionSchema.extend({
@@ -251,6 +296,12 @@ export const DemoResponseSchema = z.object({
 })
 
 export type Snapshot = z.infer<typeof SnapshotSchema>
+export type Analytics = z.infer<typeof AnalyticsSchema>
+export type AgentUsage = z.infer<typeof AgentUsageSchema>
+export type SalesAnalytics = z.infer<typeof SalesAnalyticsSchema>
+export type SalesPoint = z.infer<typeof SalesPointSchema>
+export type ResultDelivery = z.infer<typeof ResultDeliverySchema>
+export type ResultDeliveryStage = z.infer<typeof ResultDeliveryStageSchema>
 export type StageDetail = z.infer<typeof StageDetailSchema>
 export type StageResult = z.infer<typeof StageResultSchema>
 export type StageNavigation = z.infer<typeof NavigationSchema>

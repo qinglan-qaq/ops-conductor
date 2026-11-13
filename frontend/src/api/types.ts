@@ -1,5 +1,7 @@
 export type {
   AgentCard,
+  AgentUsage,
+  Analytics,
   Approval,
   ApprovalProgress,
   ExceptionCase,
@@ -7,6 +9,10 @@ export type {
   IntegrationsResponse,
   Priority,
   Report,
+  ResultDelivery,
+  ResultDeliveryStage,
+  SalesAnalytics,
+  SalesPoint,
   Snapshot,
   StageDetail,
   StageNavigation,

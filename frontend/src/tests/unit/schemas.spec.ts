@@ -12,7 +12,12 @@ import {
 
 describe('api schemas', () => {
   it('parses the exported backend fixtures', () => {
-    expect(SnapshotSchema.parse(fallbackSnapshot).navigation).toHaveLength(11)
+    const snapshot = SnapshotSchema.parse(fallbackSnapshot)
+
+    expect(snapshot.navigation).toHaveLength(11)
+    expect(snapshot.analytics.sales.points).toHaveLength(7)
+    expect(snapshot.analytics.agent_usage).toHaveLength(8)
+    expect(snapshot.analytics.results.stages).toHaveLength(10)
     expect(fallbackStageDetails.order.result?.metrics.exceptions).toBe(6)
     expect(IntegrationsSchema.parse(fallbackIntegrations).default_platform).toBe(
       'mock-nestwell-us',

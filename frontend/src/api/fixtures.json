@@ -977,6 +977,187 @@
       "decided_percent": 0,
       "l2_total": 1,
       "l3_total": 2
+    },
+    "analytics": {
+      "source": "mock",
+      "sales": {
+        "points": [
+          {
+            "date": "11-06",
+            "amount_usd": 11800,
+            "target_usd": 14286
+          },
+          {
+            "date": "11-07",
+            "amount_usd": 12600,
+            "target_usd": 14286
+          },
+          {
+            "date": "11-08",
+            "amount_usd": 12100,
+            "target_usd": 14286
+          },
+          {
+            "date": "11-09",
+            "amount_usd": 13900,
+            "target_usd": 14286
+          },
+          {
+            "date": "11-10",
+            "amount_usd": 15200,
+            "target_usd": 14286
+          },
+          {
+            "date": "11-11",
+            "amount_usd": 16400,
+            "target_usd": 14286
+          },
+          {
+            "date": "11-12",
+            "amount_usd": 17600,
+            "target_usd": 14286
+          }
+        ],
+        "total_usd": 99600,
+        "target_usd": 100000,
+        "daily_target_usd": 14286
+      },
+      "agent_usage": [
+        {
+          "agent_id": "selection",
+          "name": "选品 Agent",
+          "runs": 24,
+          "success_rate": 96,
+          "avg_duration_ms": 42000
+        },
+        {
+          "agent_id": "content",
+          "name": "内容 Agent",
+          "runs": 18,
+          "success_rate": 94,
+          "avg_duration_ms": 65000
+        },
+        {
+          "agent_id": "pricing",
+          "name": "定价 Agent",
+          "runs": 12,
+          "success_rate": 88,
+          "avg_duration_ms": 28000
+        },
+        {
+          "agent_id": "ads",
+          "name": "投放 Agent",
+          "runs": 9,
+          "success_rate": 91,
+          "avg_duration_ms": 35000
+        },
+        {
+          "agent_id": "order",
+          "name": "订单 Agent",
+          "runs": 21,
+          "success_rate": 93,
+          "avg_duration_ms": 51000
+        },
+        {
+          "agent_id": "fulfillment",
+          "name": "履约 Agent",
+          "runs": 16,
+          "success_rate": 90,
+          "avg_duration_ms": 47000
+        },
+        {
+          "agent_id": "settlement",
+          "name": "结算 Agent",
+          "runs": 14,
+          "success_rate": 89,
+          "avg_duration_ms": 39000
+        },
+        {
+          "agent_id": "compliance",
+          "name": "合规 Agent",
+          "runs": 10,
+          "success_rate": 98,
+          "avg_duration_ms": 31000
+        }
+      ],
+      "results": {
+        "stages": [
+          {
+            "stage_id": "selection",
+            "name": "选品与市场",
+            "status": "done",
+            "artifact_count": 2,
+            "evidence_count": 2
+          },
+          {
+            "stage_id": "content",
+            "name": "商品与内容",
+            "status": "running",
+            "artifact_count": 3,
+            "evidence_count": 2
+          },
+          {
+            "stage_id": "listing",
+            "name": "上架与定价",
+            "status": "waiting",
+            "artifact_count": 2,
+            "evidence_count": 2
+          },
+          {
+            "stage_id": "organic",
+            "name": "自然流量",
+            "status": "waiting",
+            "artifact_count": 2,
+            "evidence_count": 2
+          },
+          {
+            "stage_id": "paid",
+            "name": "付费广告",
+            "status": "waiting",
+            "artifact_count": 2,
+            "evidence_count": 2
+          },
+          {
+            "stage_id": "order",
+            "name": "订单",
+            "status": "alert",
+            "artifact_count": 2,
+            "evidence_count": 2
+          },
+          {
+            "stage_id": "fulfillment",
+            "name": "库存与履约",
+            "status": "running",
+            "artifact_count": 2,
+            "evidence_count": 2
+          },
+          {
+            "stage_id": "logistics",
+            "name": "物流与关务",
+            "status": "alert",
+            "artifact_count": 2,
+            "evidence_count": 2
+          },
+          {
+            "stage_id": "settlement",
+            "name": "收款与结算",
+            "status": "running",
+            "artifact_count": 2,
+            "evidence_count": 2
+          },
+          {
+            "stage_id": "aftersales",
+            "name": "售后与合规",
+            "status": "waiting",
+            "artifact_count": 1,
+            "evidence_count": 2
+          }
+        ],
+        "total_results": 10,
+        "artifact_count": 20,
+        "evidence_count": 20,
+        "alert_stages": 2
+      }
     }
   },
   "stages": {
