@@ -29,6 +29,8 @@ PORT=8010 bash scripts/demo_dispatch.sh
 
 平台控制与数据获取已按 canonical model + `CommerceDataPort` / `PlatformControlPort` / AdapterRegistry 预留；本期只实现 `MockPlatformAdapter`，真实同步与控制写端点未启用。
 
+面向 HR 的 14 页项目展示 Deck：[design/opsconductor-hr-deck](design/opsconductor-hr-deck/README.md)，包含真实产品截图、多 Agent 编排、经营图表与工程测试证据。
+
 ## 架构
 
 ```mermaid

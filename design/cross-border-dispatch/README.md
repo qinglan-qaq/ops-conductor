@@ -79,3 +79,4 @@ E2E_BASE_URL=http://127.0.0.1:8010 npm run test:e2e
 - [v1.2 设计规格](../../docs/specs/2026-11-12-dispatch-console-enhancement-design.md)
 - [v1.2 实施计划](../../docs/plans/2026-11-12-dispatch-console-v1.2.md)
 - [前端说明](../../frontend/README.md)
+- [HR 项目展示 Deck](../opsconductor-hr-deck/README.md)
