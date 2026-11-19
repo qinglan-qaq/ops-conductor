@@ -7,6 +7,7 @@
 from collections.abc import Callable, Mapping
 from typing import Protocol, runtime_checkable
 
+from opsconductor.dispatch.domain.config import Secret
 from opsconductor.dispatch.domain.models import (
     AdapterManifest,
     AgentCard,
@@ -25,6 +26,7 @@ from opsconductor.dispatch.domain.models import (
     DispatchState,
     IntegrationHealth,
 )
+from opsconductor.dispatch.domain.runs import AgentRun
 
 
 @runtime_checkable
@@ -40,6 +42,19 @@ class DispatchRepository(Protocol):
     def mutate(self, mutator: Callable[[DispatchState], None]) -> None: ...
 
     def reset(self) -> DispatchState: ...
+
+
+@runtime_checkable
+class RunRepository(Protocol):
+    """Run 记录的只读仓储契约。"""
+
+    def save(self, run: AgentRun) -> None: ...
+
+    def get(self, run_id: str) -> AgentRun | None: ...
+
+    def list(self, limit: int = 3) -> tuple[AgentRun, ...]: ...
+
+    def latest(self) -> AgentRun | None: ...
 
 
 @runtime_checkable
@@ -64,6 +79,15 @@ class ClockPort(Protocol):
     """展示用时钟端口，返回 ``HH:MM`` 标签。"""
 
     def now_label(self) -> str: ...
+
+
+@runtime_checkable
+class CredentialProvider(Protocol):
+    """按配置里的凭据引用读取密钥；实现不得记录原值。"""
+
+    def has(self, ref: str) -> bool: ...
+
+    def get(self, ref: str) -> Secret | None: ...
 
 
 @runtime_checkable

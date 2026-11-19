@@ -47,3 +47,7 @@ class ApprovalRequired(DispatchError):
 
 class IdempotencyConflict(DispatchError):
     """同一幂等键被用于不同的控制命令。"""
+
+
+class InvalidConfig(ValueError):
+    """平台配置非法、未知字段或启用了未实现的 live 模式。"""

@@ -19,6 +19,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Generic, TypeVar
 
+from opsconductor.dispatch.domain.config import CredentialStatus
 from opsconductor.dispatch.domain.enums import (
     AgentStatus,
     ApprovalStatus,
@@ -378,6 +379,33 @@ class ApprovalDraft:
 
 
 @dataclass(frozen=True)
+class ToolCallRecord:
+    """一次工具调用的可回放记录。"""
+
+    tool: str
+    params: Mapping[str, object]
+    result: Mapping[str, object]
+    status: str
+    duration_ms: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.tool, str) or not self.tool.strip():
+            raise ValueError("tool must not be blank")
+        if not isinstance(self.status, str) or not self.status.strip():
+            raise ValueError("status must not be blank")
+        if not isinstance(self.params, Mapping):
+            raise ValueError("params must be a mapping")
+        if not isinstance(self.result, Mapping):
+            raise ValueError("result must be a mapping")
+        if (
+            isinstance(self.duration_ms, bool)
+            or not isinstance(self.duration_ms, int)
+            or self.duration_ms < 0
+        ):
+            raise ValueError("duration_ms must be a non-negative integer")
+
+
+@dataclass(frozen=True)
 class AgentResult:
     """一次 Agent 处理的确定性结果。"""
 
@@ -388,6 +416,7 @@ class AgentResult:
     risk: RiskLevel
     approval: ApprovalDraft | None = None
     metadata: Mapping[str, object] = field(default_factory=dict)
+    tool_calls: tuple[ToolCallRecord, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -816,3 +845,4 @@ class IntegrationHealth:
     last_sync_at: str | None
     freshness: Freshness
     warnings: tuple[str, ...]
+    credential_status: CredentialStatus = CredentialStatus.not_required
