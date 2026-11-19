@@ -5,6 +5,7 @@ import {
   resetApprovals,
   resetDispatch,
   runDemo,
+  startRun,
 } from '@/api/dispatch'
 
 function useDispatchInvalidation() {
@@ -67,5 +68,17 @@ export function useResetDispatchMutation() {
 export function useDemoMutation() {
   return useMutation({
     mutationFn: runDemo,
+  })
+}
+
+/** 创建真实 Run；写入缓存并刷新最近运行列表。 */
+export function useStartRunMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: startRun,
+    onSuccess: (run) => {
+      queryClient.setQueryData(['dispatch', 'run', run.id], run)
+      void queryClient.invalidateQueries({ queryKey: ['dispatch', 'runs'] })
+    },
   })
 }

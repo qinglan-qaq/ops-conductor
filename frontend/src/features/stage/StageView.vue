@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { fallbackSnapshot, fallbackStageDetails } from '@/api/fixtures'
-import { ApiError } from '@/api/client'
+import { ApiError } from '@/api/errors'
 import { useSnapshotQuery } from '@/queries/useSnapshotQuery'
 import { useStageDetailQuery } from '@/queries/useStageDetailQuery'
 import StageWorkspace from './StageWorkspace.vue'

@@ -2403,7 +2403,8 @@
         ],
         "last_sync_at": "10:42",
         "freshness": "fresh",
-        "warnings": []
+        "warnings": [],
+        "credential_status": "not_required"
       }
     ]
   }

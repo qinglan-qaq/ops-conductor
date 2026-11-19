@@ -264,6 +264,7 @@ export const IntegrationPlatformSchema = z.object({
   last_sync_at: z.string().nullable(),
   freshness: z.enum(['fresh', 'stale', 'unknown']),
   warnings: z.array(z.string()),
+  credential_status: z.enum(['not_required', 'configured', 'missing']),
 })
 
 export const IntegrationsSchema = z.object({
@@ -316,3 +317,170 @@ export type TraceEvent = z.infer<typeof TraceSchema>
 export type Report = z.infer<typeof ReportSchema>
 export type StageStatus = z.infer<typeof StageStatusSchema>
 export type Priority = z.infer<typeof PrioritySchema>
+
+export const RunStatusSchema = z.enum(['running', 'succeeded', 'failed'])
+export const RunModeSchema = z.enum(['demo', 'live'])
+export const RunStepStatusSchema = z.enum([
+  'pending',
+  'running',
+  'succeeded',
+  'failed',
+  'skipped',
+])
+export const RunEventKindSchema = z.enum([
+  'run_started',
+  'agent_started',
+  'tool_called',
+  'step_completed',
+  'handoff',
+  'approval_requested',
+  'approval_decided',
+  'verification_passed',
+  'compensation_triggered',
+  'rpa_executed',
+  'reconciliation_found',
+  'report_generated',
+  'run_completed',
+])
+
+export const RunToolCallSchema = z.object({
+  tool: z.string(),
+  params: z.record(z.unknown()),
+  result: z.record(z.unknown()),
+  status: z.string(),
+  duration_ms: z.number(),
+})
+
+export const RunStepSchema = z.object({
+  index: z.number(),
+  id: z.string(),
+  stage: z.string(),
+  name: z.string(),
+  agent_id: z.string(),
+  capability: z.string(),
+  risk: RiskSchema,
+  status: RunStepStatusSchema,
+  summary: z.string(),
+  artifact: z.string().nullable(),
+  tool_calls: z.array(RunToolCallSchema),
+  approval_id: z.string().nullable(),
+  duration_ms: z.number(),
+  error: z.string().nullable(),
+})
+
+export const RunAgentSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  role: z.string(),
+  risk: RiskSchema,
+  capabilities: z.array(z.string()),
+  step_ids: z.array(z.string()),
+})
+
+export const RunEventSchema = z.object({
+  seq: z.number(),
+  kind: RunEventKindSchema,
+  at: z.string(),
+  step_id: z.string().nullable(),
+  agent_id: z.string().nullable(),
+  gate_id: z.string().nullable(),
+  title: z.string(),
+  detail: z.string(),
+})
+
+export const RunGateSchema = z.object({
+  id: z.string(),
+  step_id: z.string(),
+  stage: z.string(),
+  title: z.string(),
+  action: z.string(),
+  risk: RiskSchema,
+  owner: z.string(),
+  impact: z.string(),
+  recommended: z.enum(['approve', 'reject']).nullable(),
+  status: ApprovalStatusSchema,
+  decision: z.enum(['approve', 'reject']).nullable(),
+  actor: z.string().nullable(),
+  decided_at: z.string().nullable(),
+})
+
+export const RunHandoffSchema = z.object({
+  event_seq: z.number(),
+  from_agent_id: z.string(),
+  to_agent_id: z.string(),
+  from_step_id: z.string(),
+  to_step_id: z.string(),
+  artifact: z.string(),
+  note: z.string(),
+})
+
+export const RunArtifactSchema = z.object({
+  name: z.string(),
+  kind: ArtifactKindSchema,
+  uri: z.string(),
+  step_id: z.string(),
+  agent_id: z.string(),
+  description: z.string(),
+})
+
+export const RunMetricsSchema = z.object({
+  step_count: z.number(),
+  succeeded_steps: z.number(),
+  failed_steps: z.number(),
+  agent_count: z.number(),
+  handoff_count: z.number(),
+  gate_count: z.number(),
+  approved_gates: z.number(),
+  rejected_gates: z.number(),
+  artifact_count: z.number(),
+  compensation_count: z.number(),
+  reconciliation_count: z.number(),
+  duration_ms: z.number(),
+})
+
+export const RunSchema = z.object({
+  id: z.string(),
+  goal: GoalSchema,
+  plan_id: z.string(),
+  status: RunStatusSchema,
+  mode: RunModeSchema,
+  started_at: z.string(),
+  finished_at: z.string(),
+  summary: z.string(),
+  steps: z.array(RunStepSchema),
+  agents: z.array(RunAgentSchema),
+  events: z.array(RunEventSchema),
+  gates: z.array(RunGateSchema),
+  handoffs: z.array(RunHandoffSchema),
+  artifacts: z.array(RunArtifactSchema),
+  verification: VerificationSchema,
+  metrics: RunMetricsSchema,
+})
+
+export const RunListItemSchema = z.object({
+  id: z.string(),
+  status: RunStatusSchema,
+  goal_instruction: z.string(),
+  started_at: z.string(),
+  step_count: z.number(),
+  gate_count: z.number(),
+  summary: z.string(),
+})
+
+export const RunListSchema = z.object({
+  runs: z.array(RunListItemSchema),
+})
+
+export type Run = z.infer<typeof RunSchema>
+export type RunStep = z.infer<typeof RunStepSchema>
+export type RunAgent = z.infer<typeof RunAgentSchema>
+export type RunEvent = z.infer<typeof RunEventSchema>
+export type RunGate = z.infer<typeof RunGateSchema>
+export type RunHandoff = z.infer<typeof RunHandoffSchema>
+export type RunArtifact = z.infer<typeof RunArtifactSchema>
+export type RunMetrics = z.infer<typeof RunMetricsSchema>
+export type RunListItem = z.infer<typeof RunListItemSchema>
+export type RunList = z.infer<typeof RunListSchema>
+export type RunEventKind = z.infer<typeof RunEventKindSchema>
+export type RunStatus = z.infer<typeof RunStatusSchema>
+export type RunStepStatus = z.infer<typeof RunStepStatusSchema>

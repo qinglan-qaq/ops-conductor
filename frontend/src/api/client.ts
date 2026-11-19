@@ -1,4 +1,7 @@
 import type { z } from 'zod'
+import { ApiError } from './errors'
+
+export { ApiError } from './errors'
 
 /** API 基址；生产由 FastAPI 同源托管，开发由 Vite 代理到 8010。 */
 export const API_BASE = (
@@ -6,21 +9,6 @@ export const API_BASE = (
 ).replace(/\/$/, '')
 
 const REQUEST_TIMEOUT_MS = 15_000
-
-/** 后端返回的可归因 HTTP 错误。 */
-export class ApiError extends Error {
-  readonly status: number
-  readonly code: string
-  readonly retryable: boolean
-
-  constructor(status: number, code: string, detail: string, retryable: boolean) {
-    super(detail)
-    this.name = 'ApiError'
-    this.status = status
-    this.code = code
-    this.retryable = retryable
-  }
-}
 
 /** 响应未通过 Zod 契约校验；不得让缺字段进入组件。 */
 export class ApiContractError extends Error {

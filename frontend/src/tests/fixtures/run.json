@@ -1,0 +1,1165 @@
+{
+  "id": "run-fixture",
+  "goal": {
+    "id": "goal-demo",
+    "instruction": "本周做到 $100k GMV，广告预算 $10k；优先处理断货与超时订单。",
+    "store": "NestWell Home US",
+    "market": "美区 · 家居",
+    "target_gmv": 100000,
+    "budget": 10000,
+    "roas_target": 2.5
+  },
+  "plan_id": "plan-demo",
+  "status": "succeeded",
+  "mode": "demo",
+  "started_at": "09:38",
+  "finished_at": "09:38",
+  "summary": "10 个节点执行完成 · 审批 2 准 1 驳 · Verifier 1 项否决 · 1 次补偿 · 3 笔对账差异",
+  "steps": [
+    {
+      "index": 1,
+      "id": "step-1",
+      "stage": "selection",
+      "name": "市场与选品",
+      "agent_id": "selection",
+      "capability": "trend_scan",
+      "risk": "L0",
+      "status": "succeeded",
+      "summary": "完成 5 个 Hero SKU 的趋势评分与组合建议。",
+      "artifact": "trend_scan.json",
+      "tool_calls": [
+        {
+          "tool": "trend_scan",
+          "params": {
+            "capability": "trend_scan"
+          },
+          "result": {
+            "tool": "trend_scan",
+            "artifact": "trend_scan.json",
+            "status": "ok"
+          },
+          "status": "ok",
+          "duration_ms": 0
+        }
+      ],
+      "approval_id": null,
+      "duration_ms": 0,
+      "error": null
+    },
+    {
+      "index": 2,
+      "id": "step-2",
+      "stage": "content",
+      "name": "商品与内容",
+      "agent_id": "content",
+      "capability": "content_brief",
+      "risk": "L1",
+      "status": "succeeded",
+      "summary": "产出 15 份素材 Brief 与内容日历。",
+      "artifact": "content_brief.json",
+      "tool_calls": [
+        {
+          "tool": "content_brief",
+          "params": {
+            "capability": "content_brief"
+          },
+          "result": {
+            "tool": "content_brief",
+            "artifact": "content_brief.json",
+            "status": "ok"
+          },
+          "status": "ok",
+          "duration_ms": 0
+        }
+      ],
+      "approval_id": null,
+      "duration_ms": 0,
+      "error": null
+    },
+    {
+      "index": 3,
+      "id": "step-3",
+      "stage": "listing",
+      "name": "上架与定价",
+      "agent_id": "pricing",
+      "capability": "listing_update",
+      "risk": "L2",
+      "status": "succeeded",
+      "summary": "生成 1 条涨价建议，等待运营审批。",
+      "artifact": "price_update.json",
+      "tool_calls": [
+        {
+          "tool": "price_update",
+          "params": {
+            "capability": "listing_update"
+          },
+          "result": {
+            "tool": "price_update",
+            "artifact": "price_update.json",
+            "status": "ok"
+          },
+          "status": "ok",
+          "duration_ms": 0
+        }
+      ],
+      "approval_id": "price",
+      "duration_ms": 0,
+      "error": null
+    },
+    {
+      "index": 4,
+      "id": "step-4",
+      "stage": "organic",
+      "name": "自然流量",
+      "agent_id": "content",
+      "capability": "content_plan",
+      "risk": "L0",
+      "status": "succeeded",
+      "summary": "产出 15 份素材 Brief 与内容日历。",
+      "artifact": "content_brief.json",
+      "tool_calls": [
+        {
+          "tool": "content_brief",
+          "params": {
+            "capability": "content_plan"
+          },
+          "result": {
+            "tool": "content_brief",
+            "artifact": "content_brief.json",
+            "status": "ok"
+          },
+          "status": "ok",
+          "duration_ms": 0
+        }
+      ],
+      "approval_id": null,
+      "duration_ms": 0,
+      "error": null
+    },
+    {
+      "index": 5,
+      "id": "step-5",
+      "stage": "paid",
+      "name": "付费广告",
+      "agent_id": "ads",
+      "capability": "ads_create",
+      "risk": "L3",
+      "status": "succeeded",
+      "summary": "准备 3 个 Campaign，总预算 $10,000。",
+      "artifact": "ads_create.json",
+      "tool_calls": [
+        {
+          "tool": "ads_create",
+          "params": {
+            "capability": "ads_create"
+          },
+          "result": {
+            "tool": "ads_create",
+            "artifact": "ads_create.json",
+            "status": "ok"
+          },
+          "status": "ok",
+          "duration_ms": 0
+        }
+      ],
+      "approval_id": "budget",
+      "duration_ms": 0,
+      "error": null
+    },
+    {
+      "index": 6,
+      "id": "step-6",
+      "stage": "order",
+      "name": "订单",
+      "agent_id": "order",
+      "capability": "order_triage",
+      "risk": "L0",
+      "status": "succeeded",
+      "summary": "分类 6 单异常，2 单 P0/P1 优先止损。",
+      "artifact": "order_triage.json",
+      "tool_calls": [
+        {
+          "tool": "order_triage",
+          "params": {
+            "capability": "order_triage"
+          },
+          "result": {
+            "tool": "order_triage",
+            "artifact": "order_triage.json",
+            "status": "ok"
+          },
+          "status": "ok",
+          "duration_ms": 0
+        }
+      ],
+      "approval_id": null,
+      "duration_ms": 0,
+      "error": null
+    },
+    {
+      "index": 7,
+      "id": "step-7",
+      "stage": "fulfillment",
+      "name": "库存与履约",
+      "agent_id": "fulfillment",
+      "capability": "shipment_create",
+      "risk": "L2",
+      "status": "succeeded",
+      "summary": "创建补发运单，处理 1 票报关失败。",
+      "artifact": "shipment_create.json",
+      "tool_calls": [
+        {
+          "tool": "shipment_create",
+          "params": {
+            "capability": "shipment_create"
+          },
+          "result": {
+            "tool": "shipment_create",
+            "artifact": "shipment_create.json",
+            "status": "ok"
+          },
+          "status": "ok",
+          "duration_ms": 0
+        }
+      ],
+      "approval_id": null,
+      "duration_ms": 0,
+      "error": null
+    },
+    {
+      "index": 8,
+      "id": "step-8",
+      "stage": "logistics",
+      "name": "物流与关务",
+      "agent_id": "fulfillment",
+      "capability": "customs_declare",
+      "risk": "L2",
+      "status": "succeeded",
+      "summary": "创建补发运单，处理 1 票报关失败。",
+      "artifact": "shipment_create.json",
+      "tool_calls": [
+        {
+          "tool": "shipment_create",
+          "params": {
+            "capability": "customs_declare"
+          },
+          "result": {
+            "tool": "shipment_create",
+            "artifact": "shipment_create.json",
+            "status": "ok"
+          },
+          "status": "ok",
+          "duration_ms": 0
+        }
+      ],
+      "approval_id": null,
+      "duration_ms": 0,
+      "error": null
+    },
+    {
+      "index": 9,
+      "id": "step-9",
+      "stage": "settlement",
+      "name": "收款与结算",
+      "agent_id": "settlement",
+      "capability": "settlement_fetch",
+      "risk": "L0",
+      "status": "succeeded",
+      "summary": "拉取结算单，标记 3 笔对账差异。",
+      "artifact": "settlement_fetch.json",
+      "tool_calls": [
+        {
+          "tool": "settlement_fetch",
+          "params": {
+            "capability": "settlement_fetch"
+          },
+          "result": {
+            "tool": "settlement_fetch",
+            "artifact": "settlement_fetch.json",
+            "status": "ok"
+          },
+          "status": "ok",
+          "duration_ms": 0
+        }
+      ],
+      "approval_id": "refund",
+      "duration_ms": 0,
+      "error": null
+    },
+    {
+      "index": 10,
+      "id": "step-10",
+      "stage": "aftersales",
+      "name": "售后与合规",
+      "agent_id": "compliance",
+      "capability": "compliance_check",
+      "risk": "L0",
+      "status": "succeeded",
+      "summary": "完成政策 RAG 核验，剔除 1 个不合规 SKU。",
+      "artifact": "compliance_check.json",
+      "tool_calls": [
+        {
+          "tool": "compliance_check",
+          "params": {
+            "capability": "compliance_check"
+          },
+          "result": {
+            "tool": "compliance_check",
+            "artifact": "compliance_check.json",
+            "status": "ok"
+          },
+          "status": "ok",
+          "duration_ms": 0
+        }
+      ],
+      "approval_id": null,
+      "duration_ms": 0,
+      "error": null
+    }
+  ],
+  "agents": [
+    {
+      "id": "selection",
+      "name": "选品 Agent",
+      "role": "趋势 · 评分 · SKU 组合",
+      "risk": "L1",
+      "capabilities": [
+        "trend_scan"
+      ],
+      "step_ids": [
+        "step-1"
+      ]
+    },
+    {
+      "id": "content",
+      "name": "内容 Agent",
+      "role": "Brief · 图片 / 视频",
+      "risk": "L2",
+      "capabilities": [
+        "content_brief",
+        "content_plan"
+      ],
+      "step_ids": [
+        "step-2",
+        "step-4"
+      ]
+    },
+    {
+      "id": "pricing",
+      "name": "定价 Agent",
+      "role": "竞品 · 匹配 · 弹性",
+      "risk": "L2",
+      "capabilities": [
+        "price_update",
+        "listing_update"
+      ],
+      "step_ids": [
+        "step-3"
+      ]
+    },
+    {
+      "id": "ads",
+      "name": "投放 Agent",
+      "role": "预算 · 出价 · ROAS",
+      "risk": "L3",
+      "capabilities": [
+        "ads_create"
+      ],
+      "step_ids": [
+        "step-5"
+      ]
+    },
+    {
+      "id": "order",
+      "name": "订单 Agent",
+      "role": "异常 · 拆单 · 改址",
+      "risk": "L2",
+      "capabilities": [
+        "order_triage"
+      ],
+      "step_ids": [
+        "step-6"
+      ]
+    },
+    {
+      "id": "fulfillment",
+      "name": "履约 Agent",
+      "role": "比价 · 发货 · 报关",
+      "risk": "L2",
+      "capabilities": [
+        "shipment_create",
+        "customs_declare"
+      ],
+      "step_ids": [
+        "step-7",
+        "step-8"
+      ]
+    },
+    {
+      "id": "settlement",
+      "name": "结算 Agent",
+      "role": "对账 · 退款 · 拒付",
+      "risk": "L3",
+      "capabilities": [
+        "settlement_fetch"
+      ],
+      "step_ids": [
+        "step-9"
+      ]
+    },
+    {
+      "id": "compliance",
+      "name": "合规 Agent",
+      "role": "政策 · IP · 产品安全",
+      "risk": "L3",
+      "capabilities": [
+        "compliance_check"
+      ],
+      "step_ids": [
+        "step-10"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "seq": 1,
+      "kind": "run_started",
+      "at": "09:38",
+      "step_id": null,
+      "agent_id": null,
+      "gate_id": null,
+      "title": "运行开始",
+      "detail": "本周做到 $100k GMV，广告预算 $10k；优先处理断货与超时订单。 · 10 步计划"
+    },
+    {
+      "seq": 2,
+      "kind": "agent_started",
+      "at": "09:38",
+      "step_id": "step-1",
+      "agent_id": "selection",
+      "gate_id": null,
+      "title": "Agent 启动",
+      "detail": "选品 Agent · 市场与选品"
+    },
+    {
+      "seq": 3,
+      "kind": "tool_called",
+      "at": "09:38",
+      "step_id": "step-1",
+      "agent_id": "selection",
+      "gate_id": null,
+      "title": "工具调用",
+      "detail": "trend_scan · 0ms"
+    },
+    {
+      "seq": 4,
+      "kind": "step_completed",
+      "at": "09:38",
+      "step_id": "step-1",
+      "agent_id": "selection",
+      "gate_id": null,
+      "title": "Agent 完成",
+      "detail": "选品 Agent · trend_scan.json"
+    },
+    {
+      "seq": 5,
+      "kind": "handoff",
+      "at": "09:38",
+      "step_id": "step-2",
+      "agent_id": "content",
+      "gate_id": null,
+      "title": "Agent 交接",
+      "detail": "选品 Agent → 内容 Agent · trend_scan.json"
+    },
+    {
+      "seq": 6,
+      "kind": "agent_started",
+      "at": "09:38",
+      "step_id": "step-2",
+      "agent_id": "content",
+      "gate_id": null,
+      "title": "Agent 启动",
+      "detail": "内容 Agent · 商品与内容"
+    },
+    {
+      "seq": 7,
+      "kind": "tool_called",
+      "at": "09:38",
+      "step_id": "step-2",
+      "agent_id": "content",
+      "gate_id": null,
+      "title": "工具调用",
+      "detail": "content_brief · 0ms"
+    },
+    {
+      "seq": 8,
+      "kind": "step_completed",
+      "at": "09:38",
+      "step_id": "step-2",
+      "agent_id": "content",
+      "gate_id": null,
+      "title": "Agent 完成",
+      "detail": "内容 Agent · content_brief.json"
+    },
+    {
+      "seq": 9,
+      "kind": "handoff",
+      "at": "09:38",
+      "step_id": "step-3",
+      "agent_id": "pricing",
+      "gate_id": null,
+      "title": "Agent 交接",
+      "detail": "内容 Agent → 定价 Agent · content_brief.json"
+    },
+    {
+      "seq": 10,
+      "kind": "agent_started",
+      "at": "09:38",
+      "step_id": "step-3",
+      "agent_id": "pricing",
+      "gate_id": null,
+      "title": "Agent 启动",
+      "detail": "定价 Agent · 上架与定价"
+    },
+    {
+      "seq": 11,
+      "kind": "tool_called",
+      "at": "09:38",
+      "step_id": "step-3",
+      "agent_id": "pricing",
+      "gate_id": null,
+      "title": "工具调用",
+      "detail": "price_update · 0ms"
+    },
+    {
+      "seq": 12,
+      "kind": "step_completed",
+      "at": "09:38",
+      "step_id": "step-3",
+      "agent_id": "pricing",
+      "gate_id": null,
+      "title": "Agent 完成",
+      "detail": "定价 Agent · price_update.json"
+    },
+    {
+      "seq": 13,
+      "kind": "handoff",
+      "at": "09:38",
+      "step_id": "step-4",
+      "agent_id": "content",
+      "gate_id": null,
+      "title": "Agent 交接",
+      "detail": "定价 Agent → 内容 Agent · price_update.json"
+    },
+    {
+      "seq": 14,
+      "kind": "agent_started",
+      "at": "09:38",
+      "step_id": "step-4",
+      "agent_id": "content",
+      "gate_id": null,
+      "title": "Agent 启动",
+      "detail": "内容 Agent · 自然流量"
+    },
+    {
+      "seq": 15,
+      "kind": "tool_called",
+      "at": "09:38",
+      "step_id": "step-4",
+      "agent_id": "content",
+      "gate_id": null,
+      "title": "工具调用",
+      "detail": "content_brief · 0ms"
+    },
+    {
+      "seq": 16,
+      "kind": "step_completed",
+      "at": "09:38",
+      "step_id": "step-4",
+      "agent_id": "content",
+      "gate_id": null,
+      "title": "Agent 完成",
+      "detail": "内容 Agent · content_brief.json"
+    },
+    {
+      "seq": 17,
+      "kind": "handoff",
+      "at": "09:38",
+      "step_id": "step-5",
+      "agent_id": "ads",
+      "gate_id": null,
+      "title": "Agent 交接",
+      "detail": "内容 Agent → 投放 Agent · content_brief.json"
+    },
+    {
+      "seq": 18,
+      "kind": "agent_started",
+      "at": "09:38",
+      "step_id": "step-5",
+      "agent_id": "ads",
+      "gate_id": null,
+      "title": "Agent 启动",
+      "detail": "投放 Agent · 付费广告"
+    },
+    {
+      "seq": 19,
+      "kind": "tool_called",
+      "at": "09:38",
+      "step_id": "step-5",
+      "agent_id": "ads",
+      "gate_id": null,
+      "title": "工具调用",
+      "detail": "ads_create · 0ms"
+    },
+    {
+      "seq": 20,
+      "kind": "step_completed",
+      "at": "09:38",
+      "step_id": "step-5",
+      "agent_id": "ads",
+      "gate_id": null,
+      "title": "Agent 完成",
+      "detail": "投放 Agent · ads_create.json"
+    },
+    {
+      "seq": 21,
+      "kind": "handoff",
+      "at": "09:38",
+      "step_id": "step-6",
+      "agent_id": "order",
+      "gate_id": null,
+      "title": "Agent 交接",
+      "detail": "投放 Agent → 订单 Agent · ads_create.json"
+    },
+    {
+      "seq": 22,
+      "kind": "agent_started",
+      "at": "09:38",
+      "step_id": "step-6",
+      "agent_id": "order",
+      "gate_id": null,
+      "title": "Agent 启动",
+      "detail": "订单 Agent · 订单"
+    },
+    {
+      "seq": 23,
+      "kind": "tool_called",
+      "at": "09:38",
+      "step_id": "step-6",
+      "agent_id": "order",
+      "gate_id": null,
+      "title": "工具调用",
+      "detail": "order_triage · 0ms"
+    },
+    {
+      "seq": 24,
+      "kind": "step_completed",
+      "at": "09:38",
+      "step_id": "step-6",
+      "agent_id": "order",
+      "gate_id": null,
+      "title": "Agent 完成",
+      "detail": "订单 Agent · order_triage.json"
+    },
+    {
+      "seq": 25,
+      "kind": "handoff",
+      "at": "09:38",
+      "step_id": "step-7",
+      "agent_id": "fulfillment",
+      "gate_id": null,
+      "title": "Agent 交接",
+      "detail": "订单 Agent → 履约 Agent · order_triage.json"
+    },
+    {
+      "seq": 26,
+      "kind": "agent_started",
+      "at": "09:38",
+      "step_id": "step-7",
+      "agent_id": "fulfillment",
+      "gate_id": null,
+      "title": "Agent 启动",
+      "detail": "履约 Agent · 库存与履约"
+    },
+    {
+      "seq": 27,
+      "kind": "tool_called",
+      "at": "09:38",
+      "step_id": "step-7",
+      "agent_id": "fulfillment",
+      "gate_id": null,
+      "title": "工具调用",
+      "detail": "shipment_create · 0ms"
+    },
+    {
+      "seq": 28,
+      "kind": "step_completed",
+      "at": "09:38",
+      "step_id": "step-7",
+      "agent_id": "fulfillment",
+      "gate_id": null,
+      "title": "Agent 完成",
+      "detail": "履约 Agent · shipment_create.json"
+    },
+    {
+      "seq": 29,
+      "kind": "agent_started",
+      "at": "09:38",
+      "step_id": "step-8",
+      "agent_id": "fulfillment",
+      "gate_id": null,
+      "title": "Agent 启动",
+      "detail": "履约 Agent · 物流与关务"
+    },
+    {
+      "seq": 30,
+      "kind": "tool_called",
+      "at": "09:38",
+      "step_id": "step-8",
+      "agent_id": "fulfillment",
+      "gate_id": null,
+      "title": "工具调用",
+      "detail": "shipment_create · 0ms"
+    },
+    {
+      "seq": 31,
+      "kind": "step_completed",
+      "at": "09:38",
+      "step_id": "step-8",
+      "agent_id": "fulfillment",
+      "gate_id": null,
+      "title": "Agent 完成",
+      "detail": "履约 Agent · shipment_create.json"
+    },
+    {
+      "seq": 32,
+      "kind": "handoff",
+      "at": "09:38",
+      "step_id": "step-9",
+      "agent_id": "settlement",
+      "gate_id": null,
+      "title": "Agent 交接",
+      "detail": "履约 Agent → 结算 Agent · shipment_create.json"
+    },
+    {
+      "seq": 33,
+      "kind": "agent_started",
+      "at": "09:38",
+      "step_id": "step-9",
+      "agent_id": "settlement",
+      "gate_id": null,
+      "title": "Agent 启动",
+      "detail": "结算 Agent · 收款与结算"
+    },
+    {
+      "seq": 34,
+      "kind": "tool_called",
+      "at": "09:38",
+      "step_id": "step-9",
+      "agent_id": "settlement",
+      "gate_id": null,
+      "title": "工具调用",
+      "detail": "settlement_fetch · 0ms"
+    },
+    {
+      "seq": 35,
+      "kind": "step_completed",
+      "at": "09:38",
+      "step_id": "step-9",
+      "agent_id": "settlement",
+      "gate_id": null,
+      "title": "Agent 完成",
+      "detail": "结算 Agent · settlement_fetch.json"
+    },
+    {
+      "seq": 36,
+      "kind": "handoff",
+      "at": "09:38",
+      "step_id": "step-10",
+      "agent_id": "compliance",
+      "gate_id": null,
+      "title": "Agent 交接",
+      "detail": "结算 Agent → 合规 Agent · settlement_fetch.json"
+    },
+    {
+      "seq": 37,
+      "kind": "agent_started",
+      "at": "09:38",
+      "step_id": "step-10",
+      "agent_id": "compliance",
+      "gate_id": null,
+      "title": "Agent 启动",
+      "detail": "合规 Agent · 售后与合规"
+    },
+    {
+      "seq": 38,
+      "kind": "tool_called",
+      "at": "09:38",
+      "step_id": "step-10",
+      "agent_id": "compliance",
+      "gate_id": null,
+      "title": "工具调用",
+      "detail": "compliance_check · 0ms"
+    },
+    {
+      "seq": 39,
+      "kind": "step_completed",
+      "at": "09:38",
+      "step_id": "step-10",
+      "agent_id": "compliance",
+      "gate_id": null,
+      "title": "Agent 完成",
+      "detail": "合规 Agent · compliance_check.json"
+    },
+    {
+      "seq": 40,
+      "kind": "approval_requested",
+      "at": "09:38",
+      "step_id": "step-5",
+      "agent_id": null,
+      "gate_id": "budget",
+      "title": "审批待决",
+      "detail": "广告预算 · 3 个 Campaign · L3 · 投放 Agent → 财务小财"
+    },
+    {
+      "seq": 41,
+      "kind": "approval_decided",
+      "at": "09:38",
+      "step_id": "step-5",
+      "agent_id": null,
+      "gate_id": "budget",
+      "title": "审批通过",
+      "detail": "广告预算 · 3 个 Campaign · 财务小财"
+    },
+    {
+      "seq": 42,
+      "kind": "approval_requested",
+      "at": "09:38",
+      "step_id": "step-3",
+      "agent_id": null,
+      "gate_id": "price",
+      "title": "审批待决",
+      "detail": "涨价建议 · 1 个 SKU · L2 · 定价 Agent → 运营小运"
+    },
+    {
+      "seq": 43,
+      "kind": "approval_decided",
+      "at": "09:38",
+      "step_id": "step-3",
+      "agent_id": null,
+      "gate_id": "price",
+      "title": "审批驳回",
+      "detail": "涨价建议 · 1 个 SKU · 运营小运"
+    },
+    {
+      "seq": 44,
+      "kind": "approval_requested",
+      "at": "09:38",
+      "step_id": "step-9",
+      "agent_id": null,
+      "gate_id": "refund",
+      "title": "审批待决",
+      "detail": "退款 · 政策 RAG 已核验 · L3 · 结算 Agent → 财务小财"
+    },
+    {
+      "seq": 45,
+      "kind": "approval_decided",
+      "at": "09:38",
+      "step_id": "step-9",
+      "agent_id": null,
+      "gate_id": "refund",
+      "title": "审批通过",
+      "detail": "退款 · 政策 RAG 已核验 · 财务小财"
+    },
+    {
+      "seq": 46,
+      "kind": "verification_passed",
+      "at": "09:38",
+      "step_id": null,
+      "agent_id": null,
+      "gate_id": null,
+      "title": "Verifier 通过",
+      "detail": "1 项否决 · 毛利 / 库存 / 预算 / 合规 / trace"
+    },
+    {
+      "seq": 47,
+      "kind": "compensation_triggered",
+      "at": "09:38",
+      "step_id": null,
+      "agent_id": null,
+      "gate_id": null,
+      "title": "补偿触发",
+      "detail": "拆单库存冲突 · 回滚预占并生成替代履约"
+    },
+    {
+      "seq": 48,
+      "kind": "rpa_executed",
+      "at": "09:38",
+      "step_id": null,
+      "agent_id": null,
+      "gate_id": null,
+      "title": "RPA 执行",
+      "detail": "影刀旧版供应商门户 · 截图与审计"
+    },
+    {
+      "seq": 49,
+      "kind": "reconciliation_found",
+      "at": "09:38",
+      "step_id": null,
+      "agent_id": null,
+      "gate_id": null,
+      "title": "对账差异",
+      "detail": "3 笔差异 → 财务任务"
+    },
+    {
+      "seq": 50,
+      "kind": "report_generated",
+      "at": "09:38",
+      "step_id": null,
+      "agent_id": null,
+      "gate_id": null,
+      "title": "报告生成",
+      "detail": "指标 / 证据 / trace"
+    },
+    {
+      "seq": 51,
+      "kind": "run_completed",
+      "at": "09:38",
+      "step_id": null,
+      "agent_id": null,
+      "gate_id": null,
+      "title": "运行完成",
+      "detail": "10 步 · 8 Agent · 8 交接 · 2 准 1 驳"
+    }
+  ],
+  "gates": [
+    {
+      "id": "budget",
+      "step_id": "step-5",
+      "stage": "paid",
+      "title": "广告预算 · 3 个 Campaign",
+      "action": "ads_create",
+      "risk": "L3",
+      "owner": "投放 Agent → 财务小财",
+      "impact": "总额 $10,000 · 超过 L3 阈值",
+      "recommended": "approve",
+      "status": "approved",
+      "decision": "approve",
+      "actor": "财务小财",
+      "decided_at": "09:38"
+    },
+    {
+      "id": "price",
+      "step_id": "step-3",
+      "stage": "listing",
+      "title": "涨价建议 · 1 个 SKU",
+      "action": "price_update",
+      "risk": "L2",
+      "owner": "定价 Agent → 运营小运",
+      "impact": "影响 Listing 价格 · 剧本中运营驳回后改换 SKU",
+      "recommended": "reject",
+      "status": "rejected",
+      "decision": "reject",
+      "actor": "运营小运",
+      "decided_at": "09:38"
+    },
+    {
+      "id": "refund",
+      "step_id": "step-9",
+      "stage": "settlement",
+      "title": "退款 · 政策 RAG 已核验",
+      "action": "refund_execute",
+      "risk": "L3",
+      "owner": "结算 Agent → 财务小财",
+      "impact": "政策相符 · 资金动作必须人工审批",
+      "recommended": "approve",
+      "status": "approved",
+      "decision": "approve",
+      "actor": "财务小财",
+      "decided_at": "09:38"
+    }
+  ],
+  "handoffs": [
+    {
+      "event_seq": 5,
+      "from_agent_id": "selection",
+      "to_agent_id": "content",
+      "from_step_id": "step-1",
+      "to_step_id": "step-2",
+      "artifact": "trend_scan.json",
+      "note": "选品 Agent → 内容 Agent"
+    },
+    {
+      "event_seq": 9,
+      "from_agent_id": "content",
+      "to_agent_id": "pricing",
+      "from_step_id": "step-2",
+      "to_step_id": "step-3",
+      "artifact": "content_brief.json",
+      "note": "内容 Agent → 定价 Agent"
+    },
+    {
+      "event_seq": 13,
+      "from_agent_id": "pricing",
+      "to_agent_id": "content",
+      "from_step_id": "step-3",
+      "to_step_id": "step-4",
+      "artifact": "price_update.json",
+      "note": "定价 Agent → 内容 Agent"
+    },
+    {
+      "event_seq": 17,
+      "from_agent_id": "content",
+      "to_agent_id": "ads",
+      "from_step_id": "step-4",
+      "to_step_id": "step-5",
+      "artifact": "content_brief.json",
+      "note": "内容 Agent → 投放 Agent"
+    },
+    {
+      "event_seq": 21,
+      "from_agent_id": "ads",
+      "to_agent_id": "order",
+      "from_step_id": "step-5",
+      "to_step_id": "step-6",
+      "artifact": "ads_create.json",
+      "note": "投放 Agent → 订单 Agent"
+    },
+    {
+      "event_seq": 25,
+      "from_agent_id": "order",
+      "to_agent_id": "fulfillment",
+      "from_step_id": "step-6",
+      "to_step_id": "step-7",
+      "artifact": "order_triage.json",
+      "note": "订单 Agent → 履约 Agent"
+    },
+    {
+      "event_seq": 32,
+      "from_agent_id": "fulfillment",
+      "to_agent_id": "settlement",
+      "from_step_id": "step-8",
+      "to_step_id": "step-9",
+      "artifact": "shipment_create.json",
+      "note": "履约 Agent → 结算 Agent"
+    },
+    {
+      "event_seq": 36,
+      "from_agent_id": "settlement",
+      "to_agent_id": "compliance",
+      "from_step_id": "step-9",
+      "to_step_id": "step-10",
+      "artifact": "settlement_fetch.json",
+      "note": "结算 Agent → 合规 Agent"
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "trend_scan.json",
+      "kind": "json",
+      "uri": "mock://trend_scan.json",
+      "step_id": "step-1",
+      "agent_id": "selection",
+      "description": "选品 Agent · 市场与选品"
+    },
+    {
+      "name": "content_brief.json",
+      "kind": "json",
+      "uri": "mock://content_brief.json",
+      "step_id": "step-2",
+      "agent_id": "content",
+      "description": "内容 Agent · 商品与内容"
+    },
+    {
+      "name": "price_update.json",
+      "kind": "json",
+      "uri": "mock://price_update.json",
+      "step_id": "step-3",
+      "agent_id": "pricing",
+      "description": "定价 Agent · 上架与定价"
+    },
+    {
+      "name": "content_brief.json",
+      "kind": "json",
+      "uri": "mock://content_brief.json",
+      "step_id": "step-4",
+      "agent_id": "content",
+      "description": "内容 Agent · 自然流量"
+    },
+    {
+      "name": "ads_create.json",
+      "kind": "json",
+      "uri": "mock://ads_create.json",
+      "step_id": "step-5",
+      "agent_id": "ads",
+      "description": "投放 Agent · 付费广告"
+    },
+    {
+      "name": "order_triage.json",
+      "kind": "json",
+      "uri": "mock://order_triage.json",
+      "step_id": "step-6",
+      "agent_id": "order",
+      "description": "订单 Agent · 订单"
+    },
+    {
+      "name": "shipment_create.json",
+      "kind": "json",
+      "uri": "mock://shipment_create.json",
+      "step_id": "step-7",
+      "agent_id": "fulfillment",
+      "description": "履约 Agent · 库存与履约"
+    },
+    {
+      "name": "shipment_create.json",
+      "kind": "json",
+      "uri": "mock://shipment_create.json",
+      "step_id": "step-8",
+      "agent_id": "fulfillment",
+      "description": "履约 Agent · 物流与关务"
+    },
+    {
+      "name": "settlement_fetch.json",
+      "kind": "json",
+      "uri": "mock://settlement_fetch.json",
+      "step_id": "step-9",
+      "agent_id": "settlement",
+      "description": "结算 Agent · 收款与结算"
+    },
+    {
+      "name": "compliance_check.json",
+      "kind": "json",
+      "uri": "mock://compliance_check.json",
+      "step_id": "step-10",
+      "agent_id": "compliance",
+      "description": "合规 Agent · 售后与合规"
+    }
+  ],
+  "verification": {
+    "passed": true,
+    "checks": [
+      "margin",
+      "inventory",
+      "budget",
+      "compliance",
+      "trace"
+    ],
+    "vetoed": [
+      "SKU NW-102 margin 6.8% < 15%"
+    ]
+  },
+  "metrics": {
+    "step_count": 10,
+    "succeeded_steps": 10,
+    "failed_steps": 0,
+    "agent_count": 8,
+    "handoff_count": 8,
+    "gate_count": 3,
+    "approved_gates": 2,
+    "rejected_gates": 1,
+    "artifact_count": 10,
+    "compensation_count": 1,
+    "reconciliation_count": 3,
+    "duration_ms": 18
+  }
+}
