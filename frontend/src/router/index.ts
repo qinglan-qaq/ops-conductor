@@ -9,6 +9,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '今日态势' },
   },
   {
+    path: '/dispatch/runs/:runId',
+    name: 'run',
+    component: () => import('@/features/runs/RunView.vue'),
+    meta: { title: 'Agent 运行' },
+  },
+  {
     path: '/dispatch/stages/:stageId',
     name: 'stage',
     component: () => import('@/features/stage/StageView.vue'),
