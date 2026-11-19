@@ -1,0 +1,36 @@
+# 平台/店铺的非密钥配置。
+# 密钥只通过 credential_ref 指向环境变量或密钥管理，不写在本文件。
+
+[[platforms]]
+adapter_id = "mock-nestwell-us"
+platform = "mock"
+shop_id = "nestwell-us"
+display_name = "NestWell Home US"
+mode = "mock"
+enabled = true
+capabilities = [
+  "data.orders", "data.inventory", "data.listings", "data.settlements",
+  "data.ads", "data.logistics",
+  "control.listing", "control.price", "control.inventory",
+  "control.shipment", "control.refund",
+]
+credential_ref = ""
+rate_limit_per_minute = 60
+timeout_ms = 5000
+max_attempts = 3
+backoff_ms = 500
+
+# 本期只校验、不实例化；enabled = true 的 live 配置会启动失败。
+[[platforms]]
+adapter_id = "tiktok-us-live"
+platform = "tiktok"
+shop_id = "nestwell-us"
+display_name = "TikTok Shop US · NestWell"
+mode = "live"
+enabled = false
+capabilities = ["data.orders", "data.inventory", "control.refund"]
+credential_ref = "TIKTOK_SHOP_US_TOKEN"
+rate_limit_per_minute = 60
+timeout_ms = 5000
+max_attempts = 3
+backoff_ms = 500
