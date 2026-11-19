@@ -7,15 +7,20 @@ from dataclasses import replace
 import pytest
 
 from opsconductor.dispatch.adapters.integration.mock_platform import MockPlatformAdapter
+from opsconductor.dispatch.adapters.serialize import integrations_payload
 from opsconductor.dispatch.application.control_service import ControlService
 from opsconductor.dispatch.application.integrations import (
     AdapterRegistry,
     CapabilityRouter,
     SourceOfTruthPolicy,
 )
+from opsconductor.dispatch.domain.config import CredentialStatus
 from opsconductor.dispatch.domain.enums import (
     ControlStatus,
+    Freshness,
     IntegrationCapability,
+    IntegrationMode,
+    IntegrationStatus,
     RiskLevel,
 )
 from opsconductor.dispatch.domain.errors import (
@@ -24,7 +29,13 @@ from opsconductor.dispatch.domain.errors import (
     CapabilityNotSupported,
     IdempotencyConflict,
 )
-from opsconductor.dispatch.domain.models import ControlCommand, DataQuery, PlatformRef
+from opsconductor.dispatch.domain.models import (
+    AdapterManifest,
+    ControlCommand,
+    DataQuery,
+    IntegrationHealth,
+    PlatformRef,
+)
 
 
 def _registry() -> AdapterRegistry:
@@ -151,3 +162,52 @@ def test_source_of_truth_requires_declared_writer():
     assert policy.writer_for("inventory") == "mock-nestwell-us"
     with pytest.raises(AdapterNotFound, match="no source of truth"):
         policy.writer_for("settlement")
+
+
+def test_mock_adapter_reports_credential_not_required():
+    health = _registry().get("mock-nestwell-us").health()
+
+    assert health.credential_status is CredentialStatus.not_required
+
+
+class _LiveAdapter:
+    def __init__(self, status: CredentialStatus) -> None:
+        self._manifest = AdapterManifest(
+            adapter_id="live-test",
+            platform="tiktok",
+            version="1.0",
+            capabilities=(IntegrationCapability.data_orders,),
+            default_risk=RiskLevel.L2,
+            rate_limit_per_minute=60,
+            supports_dry_run=True,
+            supports_idempotency=True,
+            display_name="Live Test",
+        )
+        self._health = IntegrationHealth(
+            platform="tiktok",
+            shop_id="shop-1",
+            status=IntegrationStatus.degraded,
+            mode=IntegrationMode.live,
+            capabilities=(IntegrationCapability.data_orders,),
+            last_sync_at=None,
+            freshness=Freshness.unknown,
+            warnings=(),
+            credential_status=status,
+        )
+
+    def manifest(self) -> AdapterManifest:
+        return self._manifest
+
+    def health(self) -> IntegrationHealth:
+        return self._health
+
+
+def test_integration_payload_exposes_credential_status_without_ref() -> None:
+    registry = AdapterRegistry()
+    registry.register(_LiveAdapter(CredentialStatus.configured))
+
+    platform = integrations_payload(registry)["platforms"][0]
+
+    assert platform["credential_status"] == "configured"
+    assert "credential_ref" not in platform
+    assert "secret" not in str(platform).lower()

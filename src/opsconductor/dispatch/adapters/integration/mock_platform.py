@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from opsconductor.dispatch.domain.config import CredentialStatus, PlatformConfig
 from opsconductor.dispatch.domain.enums import (
     ControlStatus,
     Freshness,
@@ -58,16 +59,20 @@ _PLATFORM = "mock"
 _SHOP_ID = "nestwell-us"
 _SCHEMA_VERSION = "1.0"
 
-
-def _source() -> DataProvenance:
-    """返回 Mock 数据来源。"""
-    return DataProvenance(
-        platform=_PLATFORM,
-        shop_id=_SHOP_ID,
-        adapter="MockPlatformAdapter",
-        synced_at="10:42",
-        schema_version=_SCHEMA_VERSION,
-    )
+_DEFAULT_CONFIG = PlatformConfig(
+    adapter_id=_ADAPTER_ID,
+    platform=_PLATFORM,
+    shop_id=_SHOP_ID,
+    display_name="NestWell Home US",
+    mode=IntegrationMode.mock,
+    enabled=True,
+    capabilities=_CAPABILITIES,
+    credential_ref=None,
+    rate_limit_per_minute=60,
+    timeout_ms=5000,
+    max_attempts=3,
+    backoff_ms=500,
+)
 
 
 def _quality() -> DataQuality:
@@ -78,27 +83,41 @@ def _quality() -> DataQuality:
 class MockPlatformAdapter:
     """NestWell Home US 的 Mock 平台适配器。"""
 
-    def __init__(self) -> None:
+    def __init__(self, config: PlatformConfig | None = None) -> None:
+        self._config = config or _DEFAULT_CONFIG
+        if self._config.mode is not IntegrationMode.mock:
+            raise ValueError("MockPlatformAdapter only supports mock mode")
         self._manifest = AdapterManifest(
-            adapter_id=_ADAPTER_ID,
-            platform=_PLATFORM,
+            adapter_id=self._config.adapter_id,
+            platform=self._config.platform,
             version="1.0",
-            capabilities=_CAPABILITIES,
+            capabilities=self._config.capabilities,
             default_risk=RiskLevel.L2,
-            rate_limit_per_minute=60,
+            rate_limit_per_minute=self._config.rate_limit_per_minute,
             supports_dry_run=True,
             supports_idempotency=True,
-            display_name="NestWell Home US",
+            display_name=self._config.display_name,
         )
         self._health = IntegrationHealth(
-            platform=_PLATFORM,
-            shop_id=_SHOP_ID,
+            platform=self._config.platform,
+            shop_id=self._config.shop_id,
             status=IntegrationStatus.mock,
             mode=IntegrationMode.mock,
-            capabilities=_CAPABILITIES,
+            capabilities=self._config.capabilities,
             last_sync_at="10:42",
             freshness=Freshness.fresh,
             warnings=(),
+            credential_status=CredentialStatus.not_required,
+        )
+
+    def _source(self) -> DataProvenance:
+        """返回 Mock 数据来源。"""
+        return DataProvenance(
+            platform=self._config.platform,
+            shop_id=self._config.shop_id,
+            adapter="MockPlatformAdapter",
+            synced_at="10:42",
+            schema_version=_SCHEMA_VERSION,
         )
 
     def manifest(self) -> AdapterManifest:
@@ -133,7 +152,7 @@ class MockPlatformAdapter:
             items=(order,),
             next_cursor=None,
             fetched_at="10:42",
-            source=_source(),
+            source=self._source(),
             quality=_quality(),
         )
 
@@ -153,7 +172,7 @@ class MockPlatformAdapter:
             items=(inventory,),
             next_cursor=None,
             fetched_at="10:42",
-            source=_source(),
+            source=self._source(),
             quality=_quality(),
         )
 
@@ -174,7 +193,7 @@ class MockPlatformAdapter:
             items=(listing,),
             next_cursor=None,
             fetched_at="10:42",
-            source=_source(),
+            source=self._source(),
             quality=_quality(),
         )
 
@@ -195,7 +214,7 @@ class MockPlatformAdapter:
             items=(settlement,),
             next_cursor=None,
             fetched_at="10:42",
-            source=_source(),
+            source=self._source(),
             quality=_quality(),
         )
 
@@ -215,7 +234,7 @@ class MockPlatformAdapter:
             items=(metric,),
             next_cursor=None,
             fetched_at="10:42",
-            source=_source(),
+            source=self._source(),
             quality=_quality(),
         )
 
@@ -235,7 +254,7 @@ class MockPlatformAdapter:
             items=(shipment,),
             next_cursor=None,
             fetched_at="10:42",
-            source=_source(),
+            source=self._source(),
             quality=_quality(),
         )
 

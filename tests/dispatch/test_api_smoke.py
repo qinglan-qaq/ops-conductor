@@ -399,6 +399,8 @@ def test_integrations_endpoint_exposes_mock_health(client):
     assert "data.orders" in platform["capabilities"]
     assert "control.price" in platform["capabilities"]
     assert platform["warnings"] == []
+    assert platform["credential_status"] == "not_required"
+    assert "credential_ref" not in platform
 
 
 def test_demo_run_returns_report_and_snapshot(client):

@@ -48,6 +48,18 @@ from opsconductor.dispatch.domain.models import (
     TraceEvent,
     VerificationResult,
 )
+from opsconductor.dispatch.domain.redaction import redact_mapping
+from opsconductor.dispatch.domain.runs import (
+    AgentRun,
+    RunAgent,
+    RunArtifact,
+    RunEvent,
+    RunGate,
+    RunHandoff,
+    RunMetrics,
+    RunStep,
+    RunToolCall,
+)
 
 AGENT_STATUS_LABELS: dict[AgentStatus, str] = {
     AgentStatus.done: "已完成",
@@ -342,6 +354,7 @@ def integration_health_payload(
         "last_sync_at": health.last_sync_at,
         "freshness": health.freshness.value,
         "warnings": list(health.warnings),
+        "credential_status": health.credential_status.value,
     }
 
 
@@ -438,6 +451,167 @@ def snapshot_payload(snapshot: DispatchSnapshot) -> dict[str, Any]:
     }
 
 
+def run_tool_call_payload(call: RunToolCall) -> dict[str, Any]:
+    """序列化一次工具调用；参数与结果先脱敏。"""
+    return {
+        "tool": call.tool,
+        "params": redact_mapping(call.params),
+        "result": redact_mapping(call.result),
+        "status": call.status,
+        "duration_ms": call.duration_ms,
+    }
+
+
+def run_step_payload(step: RunStep) -> dict[str, Any]:
+    """序列化 Run 步骤及工具调用。"""
+    return {
+        "index": step.index,
+        "id": step.id,
+        "stage": step.stage,
+        "name": step.name,
+        "agent_id": step.agent_id,
+        "capability": step.capability,
+        "risk": step.risk.value,
+        "status": step.status.value,
+        "summary": step.summary,
+        "artifact": step.artifact,
+        "tool_calls": [run_tool_call_payload(call) for call in step.tool_calls],
+        "approval_id": step.approval_id,
+        "duration_ms": step.duration_ms,
+        "error": step.error,
+    }
+
+
+def run_agent_payload(agent: RunAgent) -> dict[str, Any]:
+    """序列化参与 Run 的 Agent。"""
+    return {
+        "id": agent.id,
+        "name": agent.name,
+        "role": agent.role,
+        "risk": agent.risk.value,
+        "capabilities": list(agent.capabilities),
+        "step_ids": list(agent.step_ids),
+    }
+
+
+def run_event_payload(event: RunEvent) -> dict[str, Any]:
+    """序列化一条回放事件。"""
+    return {
+        "seq": event.seq,
+        "kind": event.kind.value,
+        "at": event.at,
+        "step_id": event.step_id,
+        "agent_id": event.agent_id,
+        "gate_id": event.gate_id,
+        "title": event.title,
+        "detail": event.detail,
+    }
+
+
+def run_gate_payload(gate: RunGate) -> dict[str, Any]:
+    """序列化审批门禁。"""
+    return {
+        "id": gate.id,
+        "step_id": gate.step_id,
+        "stage": gate.stage,
+        "title": gate.title,
+        "action": gate.action,
+        "risk": gate.risk.value,
+        "owner": gate.owner,
+        "impact": gate.impact,
+        "recommended": (
+            gate.recommended.value if gate.recommended is not None else None
+        ),
+        "status": gate.status.value,
+        "decision": gate.decision.value if gate.decision is not None else None,
+        "actor": gate.actor,
+        "decided_at": gate.decided_at,
+    }
+
+
+def run_handoff_payload(handoff: RunHandoff) -> dict[str, Any]:
+    """序列化 Agent 交接。"""
+    return {
+        "event_seq": handoff.event_seq,
+        "from_agent_id": handoff.from_agent_id,
+        "to_agent_id": handoff.to_agent_id,
+        "from_step_id": handoff.from_step_id,
+        "to_step_id": handoff.to_step_id,
+        "artifact": handoff.artifact,
+        "note": handoff.note,
+    }
+
+
+def run_artifact_payload(artifact: RunArtifact) -> dict[str, Any]:
+    """序列化 Run 产物。"""
+    return {
+        "name": artifact.name,
+        "kind": artifact.kind.value,
+        "uri": artifact.uri,
+        "step_id": artifact.step_id,
+        "agent_id": artifact.agent_id,
+        "description": artifact.description,
+    }
+
+
+def run_metrics_payload(metrics: RunMetrics) -> dict[str, Any]:
+    """序列化 Run 指标。"""
+    return {
+        "step_count": metrics.step_count,
+        "succeeded_steps": metrics.succeeded_steps,
+        "failed_steps": metrics.failed_steps,
+        "agent_count": metrics.agent_count,
+        "handoff_count": metrics.handoff_count,
+        "gate_count": metrics.gate_count,
+        "approved_gates": metrics.approved_gates,
+        "rejected_gates": metrics.rejected_gates,
+        "artifact_count": metrics.artifact_count,
+        "compensation_count": metrics.compensation_count,
+        "reconciliation_count": metrics.reconciliation_count,
+        "duration_ms": metrics.duration_ms,
+    }
+
+
+def run_payload(run: AgentRun) -> dict[str, Any]:
+    """序列化一条完整 Run。"""
+    return {
+        "id": run.id,
+        "goal": goal_payload(run.goal),
+        "plan_id": run.plan_id,
+        "status": run.status.value,
+        "mode": run.mode.value,
+        "started_at": run.started_at,
+        "finished_at": run.finished_at,
+        "summary": run.summary,
+        "steps": [run_step_payload(step) for step in run.steps],
+        "agents": [run_agent_payload(agent) for agent in run.agents],
+        "events": [run_event_payload(event) for event in run.events],
+        "gates": [run_gate_payload(gate) for gate in run.gates],
+        "handoffs": [run_handoff_payload(handoff) for handoff in run.handoffs],
+        "artifacts": [run_artifact_payload(artifact) for artifact in run.artifacts],
+        "verification": verification_payload(run.verification),
+        "metrics": run_metrics_payload(run.metrics),
+    }
+
+
+def run_list_item_payload(run: AgentRun) -> dict[str, Any]:
+    """序列化最近 Run 列表项。"""
+    return {
+        "id": run.id,
+        "status": run.status.value,
+        "goal_instruction": run.goal.instruction,
+        "started_at": run.started_at,
+        "step_count": run.metrics.step_count,
+        "gate_count": run.metrics.gate_count,
+        "summary": run.summary,
+    }
+
+
+def run_list_payload(runs: tuple[AgentRun, ...]) -> dict[str, Any]:
+    """序列化最近 Run 列表。"""
+    return {"runs": [run_list_item_payload(run) for run in runs]}
+
+
 def report_payload(report: DemoRunReport) -> dict[str, Any]:
     """序列化一次 Demo 编排报告，供前端回放步骤与事件。"""
     return {
@@ -467,6 +641,17 @@ __all__ = [
     "plan_payload",
     "playbook_payload",
     "report_payload",
+    "run_agent_payload",
+    "run_artifact_payload",
+    "run_event_payload",
+    "run_gate_payload",
+    "run_handoff_payload",
+    "run_list_item_payload",
+    "run_list_payload",
+    "run_metrics_payload",
+    "run_payload",
+    "run_step_payload",
+    "run_tool_call_payload",
     "snapshot_payload",
     "stage_definition_payload",
     "stage_detail_payload",
