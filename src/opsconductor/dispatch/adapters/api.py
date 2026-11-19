@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from opsconductor.dispatch.adapters.container import (
@@ -25,6 +25,8 @@ from opsconductor.dispatch.adapters.serialize import (
     exception_payload,
     integrations_payload,
     report_payload,
+    run_list_payload,
+    run_payload,
     snapshot_payload,
     stage_detail_payload,
 )
@@ -66,6 +68,39 @@ def _invalid(exc: Exception) -> HTTPException:
 def snapshot(service: Service) -> dict[str, Any]:
     """返回调度台完整快照。"""
     return snapshot_payload(service.snapshot())
+
+
+@router.post("/runs")
+def start_run(service: Service) -> dict[str, Any]:
+    """用当前目标创建一条真实 Run；不改变审批或调度快照。"""
+    return run_payload(service.start_run())
+
+
+@router.get("/runs/latest")
+def latest_run(service: Service) -> dict[str, Any]:
+    """返回最近一条 Run；无记录时 404。"""
+    run = service.latest_run()
+    if run is None:
+        raise HTTPException(status_code=404, detail="no runs")
+    return run_payload(run)
+
+
+@router.get("/runs")
+def list_runs(
+    service: Service,
+    limit: Annotated[int, Query(ge=1, le=20)] = 3,
+) -> dict[str, Any]:
+    """按最新在前返回最近 Run 列表。"""
+    return run_list_payload(service.list_runs(limit))
+
+
+@router.get("/runs/{run_id}")
+def get_run(run_id: str, service: Service) -> dict[str, Any]:
+    """按 ID 返回 Run；未知 ID 返回 404。"""
+    run = service.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"unknown run: {run_id}")
+    return run_payload(run)
 
 
 @router.get("/stages/{stage_id}")

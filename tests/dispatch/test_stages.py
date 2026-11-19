@@ -6,6 +6,7 @@ import copy
 
 import pytest
 
+from opsconductor.dispatch.adapters.run_memory import InMemoryRunRepository
 from opsconductor.dispatch.application.agents import (
     AgentRegistry,
     VerifierAgent,
@@ -57,7 +58,7 @@ def _service() -> DispatchService:
     repo = _FakeRepository(
         lambda: build_seed_state({a.card.id: a.card for a in agents.values()})
     )
-    return DispatchService(repo, orchestrator, _Clock())
+    return DispatchService(repo, orchestrator, _Clock(), InMemoryRunRepository())
 
 
 def test_stage_catalog_has_ten_stages_in_scenario_order():

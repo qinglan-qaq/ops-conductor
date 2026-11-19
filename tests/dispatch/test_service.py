@@ -8,6 +8,7 @@ import copy
 
 import pytest
 
+from opsconductor.dispatch.adapters.run_memory import InMemoryRunRepository
 from opsconductor.dispatch.application.agents import (
     AgentRegistry,
     VerifierAgent,
@@ -57,7 +58,7 @@ def _service():
     agents = build_agents(_Tools())
     orchestrator = DispatchOrchestrator(AgentRegistry(agents), VerifierAgent(), _Clock())
     repo = _FakeRepository(lambda: build_seed_state({a.card.id: a.card for a in agents.values()}))
-    return DispatchService(repo, orchestrator, _Clock())
+    return DispatchService(repo, orchestrator, _Clock(), InMemoryRunRepository())
 
 
 def test_snapshot_starts_with_three_pending_approvals_and_six_exceptions():

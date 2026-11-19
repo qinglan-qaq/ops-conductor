@@ -47,7 +47,12 @@ from opsconductor.dispatch.domain.models import (
     StageStep,
     TraceEvent,
 )
-from opsconductor.dispatch.domain.ports import ClockPort, DispatchRepository
+from opsconductor.dispatch.domain.ports import (
+    ClockPort,
+    DispatchRepository,
+    RunRepository,
+)
+from opsconductor.dispatch.domain.runs import AgentRun
 
 
 @dataclass(frozen=True)
@@ -152,10 +157,38 @@ class DispatchService:
         repo: DispatchRepository,
         orchestrator: DispatchOrchestrator,
         clock: ClockPort,
+        runs: RunRepository,
     ) -> None:
         self._repo = repo
         self._orchestrator = orchestrator
         self._clock = clock
+        self._runs = runs
+
+    def start_run(self) -> AgentRun:
+        """用当前 goal 执行一次真实编排并保存 Run。
+
+        Returns:
+            新生成并已写入仓储的 :class:`AgentRun`。
+
+        Note:
+            不修改 dispatch 状态；run 是只读投影。
+        """
+        goal = self._repo.snapshot().goal
+        run = self._orchestrator.run_agent(goal)
+        self._runs.save(run)
+        return run
+
+    def get_run(self, run_id: str) -> AgentRun | None:
+        """按 ID 返回 Run；未知 ID 返回 ``None``。"""
+        return self._runs.get(run_id)
+
+    def latest_run(self) -> AgentRun | None:
+        """返回最近一次 Run；无记录返回 ``None``。"""
+        return self._runs.latest()
+
+    def list_runs(self, limit: int = 3) -> tuple[AgentRun, ...]:
+        """按最新在前返回最多 ``limit`` 条 Run。"""
+        return self._runs.list(limit)
 
     def snapshot(self) -> DispatchSnapshot:
         """返回当前状态的深拷贝快照及派生 KPI、导航与态势聚合。"""

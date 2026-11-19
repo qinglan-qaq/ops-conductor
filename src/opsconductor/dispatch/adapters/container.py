@@ -11,9 +11,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from opsconductor.dispatch.adapters.config_file import load_platform_configs
 from opsconductor.dispatch.adapters.integration.mock_platform import MockPlatformAdapter
 from opsconductor.dispatch.adapters.memory import InMemoryDispatchRepository
 from opsconductor.dispatch.adapters.mock_tools import MockToolGateway
+from opsconductor.dispatch.adapters.run_memory import InMemoryRunRepository
 from opsconductor.dispatch.application.agents import (
     AgentRegistry,
     VerifierAgent,
@@ -24,6 +26,8 @@ from opsconductor.dispatch.application.integrations import AdapterRegistry
 from opsconductor.dispatch.application.orchestrator import DispatchOrchestrator
 from opsconductor.dispatch.application.seed import build_seed_state
 from opsconductor.dispatch.application.service import DispatchService
+from opsconductor.dispatch.domain.enums import IntegrationMode
+from opsconductor.dispatch.domain.errors import InvalidConfig
 
 
 class SystemClock:
@@ -45,10 +49,23 @@ def _build_graph() -> tuple[DispatchService, AdapterRegistry, ControlService]:
         )
     )
     orchestrator = DispatchOrchestrator(agent_registry, VerifierAgent(), SystemClock())
-    service = DispatchService(repo, orchestrator, SystemClock())
+    service = DispatchService(
+        repo,
+        orchestrator,
+        SystemClock(),
+        InMemoryRunRepository(),
+    )
 
     integrations = AdapterRegistry()
-    integrations.register(MockPlatformAdapter())
+    for config in load_platform_configs():
+        if not config.enabled:
+            continue
+        if config.mode is IntegrationMode.mock:
+            integrations.register(MockPlatformAdapter(config))
+        else:
+            raise InvalidConfig(
+                f"live adapters are not implemented: {config.adapter_id}"
+            )
     control = ControlService(integrations, service.is_approval_approved)
     return service, integrations, control
 
