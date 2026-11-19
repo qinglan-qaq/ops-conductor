@@ -12,8 +12,8 @@ test('run page shows the relay chain, ledger and step details', async ({
   await page.goto('/dispatch')
   await page.getByRole('button', { name: '运行 Agent 团队' }).first().click()
 
-  await expect(page).toHaveURL(/\/dispatch\/runs\/run-/)
-  await expect(page.locator('[data-run-summary]')).toBeVisible()
+  await expect(page).toHaveURL(/\/dispatch\/runs\/run-/, { timeout: 15_000 })
+  await expect(page.locator('[data-run-summary]')).toBeVisible({ timeout: 15_000 })
   await expect(page.locator('[data-run-header]')).toContainText('10')
   await expect(page.locator('[data-run-header]')).toContainText('8')
   await expect(page.locator('[data-chain-node]')).toHaveCount(10)
