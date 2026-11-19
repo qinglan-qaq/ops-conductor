@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { fallbackIntegrations, fallbackSnapshot } from '@/api/fixtures'
 import { useSnapshotQuery } from '@/queries/useSnapshotQuery'
 import { useIntegrationsQuery } from '@/queries/useIntegrationsQuery'
+import { useRunsQuery } from '@/queries/useRunsQuery'
 import {
-  useDemoMutation,
   useGoalMutation,
   useResetDispatchMutation,
+  useStartRunMutation,
 } from '@/queries/mutations'
+import RecentRunsCard from './RecentRunsCard.vue'
 import { useUiStore } from '@/stores/ui'
 import { useToast } from '@/composables/useToast'
 import StatusBoard from './StatusBoard.vue'
@@ -20,10 +22,13 @@ import TraceTimeline from '@/features/trace/TraceTimeline.vue'
 const snapshotQuery = useSnapshotQuery()
 const integrationsQuery = useIntegrationsQuery()
 const goalMutation = useGoalMutation()
-const demoMutation = useDemoMutation()
+const startRunMutation = useStartRunMutation()
 const resetMutation = useResetDispatchMutation()
+const runsQuery = useRunsQuery(3)
+const router = useRouter()
 const ui = useUiStore()
 const toast = useToast()
+const recentRuns = computed(() => runsQuery.data.value?.runs ?? [])
 
 const snapshot = computed(() => snapshotQuery.data.value ?? fallbackSnapshot)
 const integrations = computed(
@@ -53,15 +58,18 @@ function submitGoal(): void {
   })
 }
 
-function playDemo(): void {
-  demoMutation.mutate(undefined, {
-    onSuccess: (data) =>
-      toast.show(
-        `${data.report.summary} · 只读投影，审批状态未改变`,
-        'gold',
-      ),
-    onError: (error) => toast.show(`演示失败：${error.message}`, 'red'),
+function runTeam(): void {
+  startRunMutation.mutate(undefined, {
+    onSuccess: (run) => {
+      toast.show('运行已生成 · 进入导演回放', 'gold')
+      void router.push({ name: 'run', params: { runId: run.id } })
+    },
+    onError: (error) => toast.show(`运行失败：${error.message}`, 'red'),
   })
+}
+
+function openRun(runId: string): void {
+  void router.push({ name: 'run', params: { runId } })
 }
 
 function resetDemo(): void {
@@ -110,10 +118,11 @@ function resetDemo(): void {
       <button
         class="button button-quiet"
         type="button"
-        :disabled="demoMutation.isPending.value"
-        @click="playDemo"
+        data-run-team
+        :disabled="startRunMutation.isPending.value"
+        @click="runTeam"
       >
-        播放演示
+        {{ startRunMutation.isPending.value ? '运行中…' : '运行 Agent 团队' }}
       </button>
       <button
         class="button button-quiet"
@@ -149,6 +158,14 @@ function resetDemo(): void {
     </section>
 
     <StatusBoard :snapshot="snapshot" :integrations="integrations" />
+
+    <RecentRunsCard
+      :runs="recentRuns"
+      :loading="runsQuery.isPending.value"
+      :error="runsQuery.isError.value"
+      @open="openRun"
+      @start="runTeam"
+    />
 
     <InsightBoard :analytics="snapshot.analytics" />
 

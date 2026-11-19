@@ -12,6 +12,11 @@ const dataCapabilities = computed(() =>
 const controlCapabilities = computed(() =>
   props.platform.capabilities.filter((item) => item.startsWith('control.')),
 )
+const credentialLabel = computed(() => {
+  if (props.platform.credential_status === 'configured') return '已配置'
+  if (props.platform.credential_status === 'missing') return '缺失'
+  return '未要求'
+})
 </script>
 
 <template>
@@ -24,6 +29,13 @@ const controlCapabilities = computed(() =>
       <div class="integration-status-badges">
         <span class="mock-pill">{{ platform.status }}</span>
         <span class="mode-pill">{{ platform.mode }}</span>
+        <span
+          class="credential-pill"
+          :class="`credential-pill--${platform.credential_status}`"
+          data-credential-status
+        >
+          凭据：{{ credentialLabel }}
+        </span>
         <FreshnessBadge :freshness="platform.freshness" />
       </div>
     </header>

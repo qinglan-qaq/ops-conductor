@@ -13,5 +13,21 @@ describe('IntegrationStatus', () => {
     expect(wrapper.text()).toContain('data.orders')
     expect(wrapper.text()).toContain('control.price')
     expect(wrapper.text()).toContain('Mock Adapter 健康')
+    expect(wrapper.find('[data-credential-status]').text()).toContain('未要求')
+  })
+
+  it('shows configured and missing credential states without a ref', () => {
+    const base = fallbackIntegrations.platforms[0]
+    const configured = mount(IntegrationStatus, {
+      props: { platform: { ...base, credential_status: 'configured' } },
+    })
+    const missing = mount(IntegrationStatus, {
+      props: { platform: { ...base, credential_status: 'missing' } },
+    })
+
+    expect(configured.find('[data-credential-status]').text()).toContain('已配置')
+    expect(missing.find('[data-credential-status]').text()).toContain('缺失')
+    expect(configured.text()).not.toContain('credential_ref')
+    expect(missing.text()).not.toContain('credential_ref')
   })
 })
