@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from time import perf_counter
 
 from opsconductor.dispatch.domain.enums import Decision, RiskLevel
 from opsconductor.dispatch.domain.models import (
@@ -22,6 +23,7 @@ from opsconductor.dispatch.domain.models import (
     AgentResult,
     AgentTask,
     ApprovalDraft,
+    ToolCallRecord,
     VerificationResult,
 )
 from opsconductor.dispatch.domain.ports import ToolPort
@@ -118,8 +120,18 @@ class RuleBasedAgent:
         Returns:
             带工具产物、摘要、风险、审批草稿与元数据的执行结果。
         """
-        tool_result = self._tools.call(self._spec.tool, {"capability": task.capability})
+        params = {"capability": task.capability}
+        started = perf_counter()
+        tool_result = self._tools.call(self._spec.tool, params)
+        duration_ms = int((perf_counter() - started) * 1000)
         artifact = tool_result.get("artifact") or f"{self._spec.tool}.json"
+        tool_call = ToolCallRecord(
+            tool=self._spec.tool,
+            params=params,
+            result=dict(tool_result),
+            status=str(tool_result.get("status", "ok")),
+            duration_ms=duration_ms,
+        )
         return AgentResult(
             agent_id=self._spec.id,
             stage=task.stage,
@@ -128,6 +140,7 @@ class RuleBasedAgent:
             risk=self._spec.risk,
             approval=self._spec.approval,
             metadata=dict(self._spec.metadata),
+            tool_calls=(tool_call,),
         )
 
 
