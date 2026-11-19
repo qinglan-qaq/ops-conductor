@@ -27,7 +27,7 @@ htmlcov/
 # ---------- 数据与模型产物 ----------
 data/
 outputs/
-runs/
+/runs/
 logs/
 *.pt
 *.pth
