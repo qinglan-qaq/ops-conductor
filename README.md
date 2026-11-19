@@ -27,7 +27,9 @@ PORT=8010 bash scripts/demo_dispatch.sh
 
 页面提供场景目录（10 阶段 + 控制塔）、今日态势、经营可视化（销售额/Agent 使用量/结果交付）、阶段工作台（Agent 摘要/产物/指标/证据/来源）、审批、异常 playbook 与平台集成健康。前端开发用 `cd frontend && npm run dev`（Vite 代理 `/api` 到 8010）；测试命令见 [前端说明](frontend/README.md)。
 
-平台控制与数据获取已按 canonical model + `CommerceDataPort` / `PlatformControlPort` / AdapterRegistry 预留；本期只实现 `MockPlatformAdapter`，真实同步与控制写端点未启用。
+**Agent 运行页**：从今日态势点击「运行 Agent 团队」创建真实 `AgentRun`，跳转 `/dispatch/runs/:runId`。页面以导演模式回放 10 步、8 个 Agent、8 次交接、3 个审批门和治理收尾；支持播放/暂停、单步、后退、倍速、完整视图，以及链条/交接账本/步骤抽屉定位。Run 是只读投影，不改变审批状态。
+
+平台控制与数据获取已按 canonical model + `CommerceDataPort` / `PlatformControlPort` / AdapterRegistry 预留；本期只实现 `MockPlatformAdapter`，真实同步与控制写端点未启用。平台连接配置在 [config/platforms.toml](config/platforms.toml)，只包含非密钥字段；密钥通过 `CredentialProvider` 从 `.env`/环境变量读取，不进入 Run、日志或 API。
 
 面向 HR 的 14 页项目展示 Deck：[design/opsconductor-hr-deck](design/opsconductor-hr-deck/README.md)，包含真实产品截图、多 Agent 编排、经营图表与工程测试证据。
 
@@ -190,9 +192,13 @@ curl -sS "$BASE/api/v1/tasks/<TASK_ID>" -H "X-API-Key: dev-operator-a"
 pytest -q          # 需要 Docker PostgreSQL 15432；测试库为 opsconductor_test
 ruff check .
 mypy src
+
+# 台前调度切片（内存仓储，不需要数据库）
+pytest tests/dispatch -q
+cd frontend && npm run typecheck && npm run test:unit && npm run build
 ```
 
-当前基线：**164 passed + 5 xfailed**。5 个 xfail 是 GT-08/09/12/17/26，原因见 [docs/KNOWN_GAPS.md](docs/KNOWN_GAPS.md)。
+当前基线：**164 passed + 5 xfailed**。5 个 xfail 是 GT-08/09/12/17/26，原因见 [docs/KNOWN_GAPS.md](docs/KNOWN_GAPS.md)。台前调度切片新增 Run/配置/凭据测试，当前 `pytest tests/dispatch -q` 为 **147 passed**；前端为 **48 个单测 + 15 个 E2E**（E2E 需要本地 Chrome 与 8010 服务）。
 
 失败注入演示（真实执行器、真实写服务和注入故障；不在 3 分钟主流程内）：
 
@@ -214,12 +220,16 @@ src/opsconductor/
 ├── tools/         # MCP 服务端/客户端、写审批守卫、故障注入
 ├── domain/        # ERP 模型、种子数据、拆单/改址/补偿写服务
 ├── observability/ # 审计与 trace
+├── dispatch/      # 台前调度：domain/application/adapters、Run 与执行链
 ├── schemas.py     # 任务/计划 API Schema
 ├── config.py      # 环境变量配置
 ├── db.py          # 数据库引擎与会话
 ├── agents/        # 后续阶段占位
 ├── rag/           # 后续阶段占位
 └── memory/        # 后续阶段占位
+
+config/             # 平台非密钥配置与凭据引用说明
+frontend/src/features/runs/  # Run 页、播放器、执行链组件
 ```
 
 ## 路线图
@@ -234,6 +244,8 @@ src/opsconductor/
 - [总规格 SPEC.md](SPEC.md) — 平台目标、端到端链路、六平面架构、归因/持久化/Skill/SOP/飞轮、验收与开放问题（审查稿）
 - [文档索引](docs/README.md)
 - [跨境电商台前调度 Demo](design/cross-border-dispatch/README.md) — Vue 3 场景目录 + 阶段工作台 + 可运行 FastAPI 后端
+- [Agent 运行可观测设计](docs/specs/2026-11-18-agent-run-observability-design.md) — Run 模型、导演回放、执行链、配置与凭据边界
+- [Agent 运行可观测实施计划](docs/plans/2026-11-19-agent-run-observability.md) — TDD 任务拆分与验收
 - [台前调度台 v1.2 设计与计划](docs/specs/2026-11-12-dispatch-console-enhancement-design.md) — 阶段结果、Vue 前端与平台集成边界
 - [前端说明](frontend/README.md) — 开发、构建、TypeScript/Vitest/Playwright 命令
 - [系统设计](docs/design.md)

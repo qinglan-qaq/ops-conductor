@@ -20,6 +20,8 @@
 15. [实施计划](plan.md) — 6 周排期、交付物、投递节奏与风险。
 16. [数据来源与合规](data-sources.md) — 公开数据、许可状态、灌数与仓库策略。
 17. [架构决策记录](adr/README.md) — 关键架构取舍及其理由。
+18. [Agent 运行可观测设计](specs/2026-11-18-agent-run-observability-design.md) — Run 模型、导演回放、执行链、配置与凭据边界。
+19. [Agent 运行可观测实施计划](plans/2026-11-19-agent-run-observability.md) — TDD 任务拆分、验收与执行边界。
 
 ## 文档清单
 
@@ -43,6 +45,8 @@
 | [跨境电商台前调度 Demo 实施计划](plans/2026-11-12-cross-border-dispatch-demo.md) | 领域/应用/适配分层、FastAPI、TDD 与端到端冒烟 | 已执行 |
 | [台前调度导航、阶段工作台与平台集成扩展设计](specs/2026-11-12-dispatch-console-enhancement-design.md) | 侧边栏、首页态势、Vue 前端、阶段工作台、平台控制/数据接口与聚水潭/TikTok/Amazon/Google Trends 示例 | 已实现 |
 | [台前调度台 v1.2 实施计划](plans/2026-11-12-dispatch-console-v1.2.md) | 领域/应用/适配阶段契约、Mock Adapter、Vue 3 脚手架、阶段工作台、E2E 与验收 | 已执行 |
+| [Agent 运行可观测设计](specs/2026-11-18-agent-run-observability-design.md) | Run 模型、51 事件回放、执行链、值对象校验、配置/凭据边界 | 已实施 |
+| [Agent 运行可观测实施计划](plans/2026-11-19-agent-run-observability.md) | 12 个 TDD 任务、验收标准与执行边界 | 已执行 |
 | [HR 项目展示 Deck](../design/opsconductor-hr-deck/README.md) | 14 页跨境电商场景、多 Agent 编排、真实截图与工程证据 | 可演示 |
 | [3 分钟演示脚本](demo-script.md) | MVP 主流程演示、演示账号与故障注入 | 可用 |
 | [Known Gaps](KNOWN_GAPS.md) | 5 条 xfail 的原因、影响与后续计划 | 已记录 |
@@ -78,3 +82,4 @@
 - 2026-11-12：完成台前调度台 v1.2：阶段结果/详情与集成 API、MockPlatformAdapter/ControlService、Vue 3 场景目录与阶段工作台、Vue 静态托管与 Playwright 冒烟；见 [v1.2 实施计划](plans/2026-11-12-dispatch-console-v1.2.md)。
 - 2026-11-12：新增首页经营可视化：近 7 日销售额、Agent 使用量/成功率、阶段结果交付；全部图表使用朱墨自绘样式并标注 Mock 数据。
 - 2026-11-12：新增 [HR 项目展示 Deck](../design/opsconductor-hr-deck/README.md)，14 页、约 9 分钟，覆盖电商场景、多 Agent 编排、产品截图与工程证据。
+- 2026-11-19：新增 Agent 运行可观测 A 切片：真实 `AgentRun`、51 事件导演回放、执行链/交接账本/治理链、值对象与分层测试、`config/platforms.toml` 与凭据边界；见 [设计](specs/2026-11-18-agent-run-observability-design.md) 与 [实施计划](plans/2026-11-19-agent-run-observability.md)。
